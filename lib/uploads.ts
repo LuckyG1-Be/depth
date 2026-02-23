@@ -215,3 +215,9 @@ export async function saveUpload(file: UploadableFile): Promise<SavedUpload> {
     thumbPath: `/uploads/_thumbs/${thumbFilename}`,
   };
 }
+export async function deleteUploadIfExists(uploadPathOrUrl: string) {
+  try {
+    const disk = resolveUploadPath(uploadPathOrUrl);
+    await fs.promises.unlink(disk).catch(() => {});
+  } catch {}
+}

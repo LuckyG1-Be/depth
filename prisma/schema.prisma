@@ -22,15 +22,15 @@ model User {
   lookingFor String
 
   birthdate       DateTime
-  phone           String   @unique
+  phone           String    @unique
   phoneVerifiedAt DateTime?
-  verified        Boolean  @default(false)
-  isBlocked       Boolean  @default(false)
+  verified        Boolean   @default(false)
+  isBlocked       Boolean   @default(false)
 
   chatBannedUntil DateTime?
 
-  riskScore   Int      @default(0)
-  riskLevel   String   @default("LOW")
+  riskScore   Int       @default(0)
+  riskLevel   String    @default("LOW")
   lastLoginAt DateTime?
   lastIp      String?
   lastUaHash  String?
@@ -42,10 +42,10 @@ model User {
   profile       Profile?
   preferences   Preferences?
   photos        Photo[]
-  likesGiven    Like[]      @relation("LikesGiven")
-  likesReceived Like[]      @relation("LikesReceived")
-  matchesA      Match[]     @relation("MatchA")
-  matchesB      Match[]     @relation("MatchB")
+  likesGiven    Like[]       @relation("LikesGiven")
+  likesReceived Like[]       @relation("LikesReceived")
+  matchesA      Match[]      @relation("MatchA")
+  matchesB      Match[]      @relation("MatchB")
   messages      Message[]
   dailyQuota    DailyQuota?
 
@@ -57,8 +57,8 @@ model User {
   devices        DeviceFingerprint[]
   securityEvents SecurityEvent[]
 
-  blocksGiven    Block[]  @relation("BlocksGiven")
-  blocksReceived Block[]  @relation("BlocksReceived")
+  blocksGiven    Block[] @relation("BlocksGiven")
+  blocksReceived Block[] @relation("BlocksReceived")
 
   reportsGiven    Report[] @relation("ReportsGiven")
   reportsReceived Report[] @relation("ReportsReceived")
@@ -68,9 +68,9 @@ model User {
 }
 
 model Profile {
-  id       String @id @default(cuid())
-  userId   String @unique
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   intent   String
   religion String?
@@ -89,29 +89,29 @@ model Profile {
 }
 
 model Preferences {
-  id             String @id @default(cuid())
-  userId         String @unique
-  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  minAge         Int    @default(18)
-  maxAge         Int    @default(99)
-  maxDistanceKm  Int    @default(50)
-  genders        String @default("[]")
+  minAge        Int    @default(18)
+  maxAge        Int    @default(99)
+  maxDistanceKm Int    @default(50)
+  genders       String @default("[]")
 
   intentFilter   String?
   religionFilter String?
   valuesFilter   String?
 
-  verifiedOnly   Boolean @default(false)
+  verifiedOnly Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Photo {
-  id        String @id @default(cuid())
-  userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   slot      Int
   path      String
@@ -148,24 +148,26 @@ model Like {
 }
 
 model Match {
-  id              String   @id @default(cuid())
-  userAId         String
-  userBId         String
+  id      String @id @default(cuid())
+  userAId String
+  userBId String
 
-  isUnlocked      Boolean  @default(false)
+  isUnlocked      Boolean   @default(false)
   unlockedAt      DateTime?
   superlikeFromId String?
 
-  isArchived      Boolean  @default(false)
-  archivedAt      DateTime?
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   userA User @relation("MatchA", fields: [userAId], references: [id], onDelete: Cascade)
   userB User @relation("MatchB", fields: [userBId], references: [id], onDelete: Cascade)
 
   messages Message[]
+
+  reports Report[]
 
   @@unique([userAId, userBId])
   @@index([userAId])
@@ -180,7 +182,7 @@ model Message {
   text       String
   createdAt  DateTime @default(now())
 
-  isRead Boolean @default(false)
+  isRead Boolean   @default(false)
   readAt DateTime?
 
   match    Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
@@ -191,17 +193,17 @@ model Message {
 }
 
 model DailyQuota {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   dayKey          String
-  likesUsed       Int      @default(0)
-  seenUsed        Int      @default(0)
+  likesUsed       Int       @default(0)
+  seenUsed        Int       @default(0)
   superlikeUsedAt DateTime?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model SeenProfile {
@@ -213,7 +215,7 @@ model SeenProfile {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, seenUserId])
+  @@unique([userId, seenUserId, dayKey])
   @@index([userId, dayKey])
   @@index([seenUserId])
   @@index([createdAt])
@@ -222,14 +224,16 @@ model SeenProfile {
 model AccountFlag {
   id        String   @id @default(cuid())
   userId    String
-  type      String
+  code      String
+  reason    String?
   severity  Int      @default(1)
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([type])
+  @@index([code])
+  @@index([createdAt])
 }
 
 model ProfileView {
@@ -247,11 +251,15 @@ model ProfileView {
 }
 
 model DeviceFingerprint {
-  id         String   @id @default(cuid())
-  userId     String
-  fpHash     String
-  lastSeenAt DateTime @default(now())
-  createdAt  DateTime @default(now())
+  id     String @id @default(cuid())
+  userId String
+  fpHash String
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  seenCount   Int      @default(1)
+
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -281,6 +289,7 @@ model Block {
   id        String   @id @default(cuid())
   blockerId String
   blockedId String
+  reason    String?
   createdAt DateTime @default(now())
 
   blocker User @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
@@ -289,37 +298,51 @@ model Block {
   @@unique([blockerId, blockedId])
   @@index([blockerId])
   @@index([blockedId])
+  @@index([createdAt])
 }
 
 model Report {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   reporterId String
   reportedId String
-  reason     String
-  details    String?
-  createdAt  DateTime @default(now())
+  matchId    String?
 
-  reporter User @relation("ReportsGiven", fields: [reporterId], references: [id], onDelete: Cascade)
-  reported User @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: Cascade)
+  reasonCode String
+  details    String?
+
+  includeLastMessages Boolean @default(false)
+  blockImmediately    Boolean @default(false)
+
+  evidence String?
+  priority Int     @default(0)
+  status   String  @default("OPEN")
+
+  createdAt DateTime @default(now())
+
+  reporter User   @relation("ReportsGiven", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User   @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: Cascade)
+  match    Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
 
   @@index([reporterId])
   @@index([reportedId])
+  @@index([matchId])
+  @@index([status])
   @@index([createdAt])
 }
 
 model AppConfig {
-  id        String @id @default(cuid())
-  key       String @unique
+  id        String   @id @default(cuid())
+  key       String   @unique
   value     String
   updatedAt DateTime @updatedAt
 }
 
 model VerificationRequest {
-  id         String   @id @default(cuid())
-  userId     String
+  id     String @id @default(cuid())
+  userId String
 
   // Values: "PENDING" | "APPROVED" | "REJECTED"
-  status     String   @default("PENDING")
+  status String @default("PENDING")
 
   // Oude single selfie (compat)
   selfiePath String?
@@ -328,7 +351,7 @@ model VerificationRequest {
   selfiePaths String @default("[]")
   poseLabels  String @default("[]")
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
   reviewerId String?
   reviewedAt DateTime?
@@ -339,4 +362,27 @@ model VerificationRequest {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+model EmailOtp {
+  email     String   @id
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
+model PhoneOtp {
+  phone     String   @id
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  ip        String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
 }
