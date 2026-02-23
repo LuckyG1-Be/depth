@@ -1,0 +1,342 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String @id @default(cuid())
+  email        String @unique
+  passwordHash String
+  name         String
+  city         String @default("")
+
+  lat     Float?
+  lng     Float?
+  placeId String?
+
+  gender     String
+  lookingFor String
+
+  birthdate       DateTime
+  phone           String   @unique
+  phoneVerifiedAt DateTime?
+  verified        Boolean  @default(false)
+  isBlocked       Boolean  @default(false)
+
+  chatBannedUntil DateTime?
+
+  riskScore   Int      @default(0)
+  riskLevel   String   @default("LOW")
+  lastLoginAt DateTime?
+  lastIp      String?
+  lastUaHash  String?
+
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile       Profile?
+  preferences   Preferences?
+  photos        Photo[]
+  likesGiven    Like[]      @relation("LikesGiven")
+  likesReceived Like[]      @relation("LikesReceived")
+  matchesA      Match[]     @relation("MatchA")
+  matchesB      Match[]     @relation("MatchB")
+  messages      Message[]
+  dailyQuota    DailyQuota?
+
+  seenProfiles         SeenProfile[]
+  flags                AccountFlag[]
+  profileViewsAsViewer ProfileView[] @relation("ProfileViewViewer")
+  profileViewsAsViewed ProfileView[] @relation("ProfileViewViewed")
+
+  devices        DeviceFingerprint[]
+  securityEvents SecurityEvent[]
+
+  blocksGiven    Block[]  @relation("BlocksGiven")
+  blocksReceived Block[]  @relation("BlocksReceived")
+
+  reportsGiven    Report[] @relation("ReportsGiven")
+  reportsReceived Report[] @relation("ReportsReceived")
+
+  verificationRequests VerificationRequest[] @relation("VerificationRequests")
+  verificationReviews  VerificationRequest[] @relation("VerificationReviews")
+}
+
+model Profile {
+  id       String @id @default(cuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  intent   String
+  religion String?
+
+  values   String @default("[]")
+  passions String @default("[]")
+
+  q1 String?
+  q2 String?
+  q3 String?
+  q4 String?
+  q5 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Preferences {
+  id             String @id @default(cuid())
+  userId         String @unique
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  minAge         Int    @default(18)
+  maxAge         Int    @default(99)
+  maxDistanceKm  Int    @default(50)
+  genders        String @default("[]")
+
+  intentFilter   String?
+  religionFilter String?
+  valuesFilter   String?
+
+  verifiedOnly   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Photo {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  slot      Int
+  path      String
+  mime      String
+  width     Int?
+  height    Int?
+  sizeBytes Int?
+
+  thumbPath   String?
+  contentHash String?
+  aHash       String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, slot])
+  @@index([userId])
+  @@index([contentHash])
+  @@index([aHash])
+}
+
+model Like {
+  id         String   @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  type       String   @default("LIKE")
+  createdAt  DateTime @default(now())
+
+  fromUser User @relation("LikesGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("LikesReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId])
+  @@index([fromUserId])
+}
+
+model Match {
+  id              String   @id @default(cuid())
+  userAId         String
+  userBId         String
+
+  isUnlocked      Boolean  @default(false)
+  unlockedAt      DateTime?
+  superlikeFromId String?
+
+  isArchived      Boolean  @default(false)
+  archivedAt      DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  userA User @relation("MatchA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User @relation("MatchB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  matchId    String
+  fromUserId String
+  toUserId   String
+  text       String
+  createdAt  DateTime @default(now())
+
+  isRead Boolean @default(false)
+  readAt DateTime?
+
+  match    Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  fromUser User  @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, createdAt])
+  @@index([toUserId, isRead])
+}
+
+model DailyQuota {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dayKey          String
+  likesUsed       Int      @default(0)
+  seenUsed        Int      @default(0)
+  superlikeUsedAt DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SeenProfile {
+  id         String   @id @default(cuid())
+  userId     String
+  seenUserId String
+  dayKey     String
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seenUserId])
+  @@index([userId, dayKey])
+  @@index([seenUserId])
+  @@index([createdAt])
+}
+
+model AccountFlag {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  severity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+}
+
+model ProfileView {
+  id        String   @id @default(cuid())
+  viewerId  String
+  viewedId  String
+  createdAt DateTime @default(now())
+
+  viewer User @relation("ProfileViewViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  viewed User @relation("ProfileViewViewed", fields: [viewedId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId])
+  @@index([viewedId])
+  @@index([createdAt])
+}
+
+model DeviceFingerprint {
+  id         String   @id @default(cuid())
+  userId     String
+  fpHash     String
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([fpHash])
+}
+
+model SecurityEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  type       String
+  severity   Int      @default(1)
+  scoreDelta Int      @default(0)
+  ip         String?
+  uaHash     String?
+  meta       String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+model Report {
+  id         String   @id @default(cuid())
+  reporterId String
+  reportedId String
+  reason     String
+  details    String?
+  createdAt  DateTime @default(now())
+
+  reporter User @relation("ReportsGiven", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId])
+  @@index([reportedId])
+  @@index([createdAt])
+}
+
+model AppConfig {
+  id        String @id @default(cuid())
+  key       String @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationRequest {
+  id         String   @id @default(cuid())
+  userId     String
+
+  // Values: "PENDING" | "APPROVED" | "REJECTED"
+  status     String   @default("PENDING")
+
+  // Oude single selfie (compat)
+  selfiePath String?
+
+  // ✅ Nieuw: meerdere selfies + pose labels (JSON strings)
+  selfiePaths String @default("[]")
+  poseLabels  String @default("[]")
+
+  createdAt  DateTime @default(now())
+
+  reviewerId String?
+  reviewedAt DateTime?
+
+  user     User  @relation("VerificationRequests", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("VerificationReviews", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}

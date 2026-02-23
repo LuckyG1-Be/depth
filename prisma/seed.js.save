@@ -1,0 +1,61 @@
+
+/* eslint-disable no-console */
+const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcryptjs");
+const prisma = new PrismaClient();
+
+const VALUES = ["Loyaliteit","Humor","Familie","Ambitie","Vrijheid","Rust","Avontuur","Creativiteit","Gezondheid","Groei","Eerlijkheid","Stabiliteit","Empathie","Discipline","Nieuwsgierigheid","Respect","Open communicatie","Gelijkheid"];
+const PASSIONS = ["Fitness","Koken","Reizen","Muziek","Films","Gaming","Boeken","Kunst","Ondernemen","Wandelen","Voetbal","Lopen","Fietsen","Fotografie","Tech","Concerten","Musea","Café-hoppen","Yoga","Dansen"];
+
+function pick(arr, n){
+  const copy=[...arr], out=[];
+  while(out.length<n && copy.length){
+    const i=Math.floor(Math.random()*copy.length);
+    out.push(copy.splice(i,1)[0]);
+  }
+  return out;
+}
+
+async function main(){
+  const existing = await prisma.user.findFirst();
+  if(existing){ console.log("Seed skipped: users already exist."); return; }
+
+  const users = [
+    { email: "demo1@depth.local", name: "Alex", city: "Antwerpen" },
+    { email: "demo2@depth.local", name: "Sam", city: "Antwerpen" },
+    { email: "demo3@depth.local", name: "Noor", city: "Gent" },
+    { email: "demo4@depth.local", name: "Milan", city: "Leuven" },
+  ];
+
+  for (const u of users){
+    const passwordHash = await bcrypt.hash("password123", 10);
+    await prisma.user.create({
+      data: {
+        email: u.email,
+        name: u.name,
+        city: u.city,
+        passwordHash,
+        verified: "BASIC",
+        profile: {
+          create: {
+            values: JSON.stringify(pick(VALUES, 5)),
+            passions: JSON.stringify(pick(PASSIONS, 3)),
+            depthAnswers: JSON.stringify({
+              q1: "Een leven met groei en echte connecties.",
+              q2: "Dat communicatie alles is.",
+              q3: "Iemand die warm en eerlijk is.",
+              q4: "Sporten, muziek, en koken.",
+              q5: "Meer rust en minder haast."
+            }),
+            photos: JSON.stringify([]),
+            bio: "Demo-profiel voor Depth."
+          }
+        }
+      }
+    });
+    console.log("Created", u.email);
+  }
+  console.log("Seed complete. Login: demo1@depth.local / password123");
+}
+
+main().catch(e=>{ console.error(e); process.exit(1); }).finally(()=>prisma.$disconnect());
