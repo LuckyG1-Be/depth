@@ -4,8 +4,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "opennextjs-cloudflare build --skip-next-build",
+    "build:next": "next build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "build:cloudflare": "opennextjs-cloudflare build",
+    "build:cloudflare": "npm run build",
     "deploy:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare deploy --keep-vars",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "start": "next start",

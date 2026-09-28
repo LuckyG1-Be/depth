@@ -2,6 +2,8 @@ import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
+  outputFileTracingRoot: process.cwd(),
   webpack(config) {
     config.experiments = {
       ...config.experiments,
@@ -31,7 +33,7 @@ const nextConfig = {
   },
 };
 
-if (process.env.NODE_ENV === "development") {
+if (process.argv.includes("dev")) {
   initOpenNextCloudflareForDev();
 }
 
