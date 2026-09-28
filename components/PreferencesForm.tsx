@@ -199,6 +199,12 @@ export default function DatingPreferencesForm({
     });
   }
 
+  function resetPreferences() {
+    const next = { genders: ["Vrouw", "Man"], minAge: 20, maxAge: 35, maxDistanceKm: 50, intentFilter: "", religionFilter: "", valuesFilter: [], verifiedOnly: false };
+    setGenders(next.genders); setMinAge(next.minAge); setMaxAge(next.maxAge); setMaxDistanceKm(next.maxDistanceKm); setIntentFilter(""); setReligionFilter(""); setValuesFilter([]); setVerifiedOnly(false);
+    void save(next);
+  }
+
   if (loading) {
     return <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm opacity-70">Laden…</div>;
   }
@@ -210,9 +216,12 @@ export default function DatingPreferencesForm({
       {/* Status */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm opacity-70">{status === "saving" ? "Opslaan…" : status === "saved" ? "Opgeslagen ✓" : ""}</div>
+        <button type="button" onClick={resetPreferences} disabled={saving} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold hover:bg-white/10 disabled:opacity-50">Reset voorkeuren</button>
 
         {variant === "modal" && onClose ? <button type="button" onClick={onClose} className="sr-only" aria-label="Sluiten" /> : null}
       </div>
+
+      <div className="rounded-2xl border border-emerald-300/15 bg-emerald-400/10 p-4 text-sm text-emerald-50/85">Je ziet profielen tussen <b>{minAge} en {maxAge}</b> jaar binnen ongeveer <b>{maxDistanceKm} km</b>. Je voorkeuren worden automatisch opgeslagen.</div>
 
       {/* Verified filter */}
       <section className="rounded-3xl border border-white/10 bg-white/5 p-6">

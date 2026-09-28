@@ -14,8 +14,9 @@ export const revalidate = 0;
 const NEW_DAYS = 7;
 const MIN_PHOTOS = 3;
 const REQUIRED_VALUES = 3;
-const REQUIRED_PASSIONS = 4;
+const REQUIRED_PASSIONS = 2;
 const DEPTH_MIN_CHARS = 25;
+const REQUIRED_DEPTH_ANSWERS = 3;
 
 const db: any = prisma;
 
@@ -82,11 +83,11 @@ function completenessChecklist(me: {
   const passions = safeJsonArray(me.profile.passions);
 
   if (values.length !== REQUIRED_VALUES) items.push({ title: "Waarden", hint: `Selecteer exact ${REQUIRED_VALUES} waarden.` });
-  if (passions.length !== REQUIRED_PASSIONS) items.push({ title: "Passies", hint: `Selecteer exact ${REQUIRED_PASSIONS} passies.` });
+  if (passions.length < REQUIRED_PASSIONS) items.push({ title: "Passies", hint: `Selecteer minstens ${REQUIRED_PASSIONS} passies.` });
 
   const qs = [me.profile.q1, me.profile.q2, me.profile.q3, me.profile.q4, me.profile.q5].map((x) => String(x || "").trim());
-  if (!qs.every((x) => x.length >= DEPTH_MIN_CHARS)) {
-    items.push({ title: "Depth-vragen", hint: `Beantwoord alle 5 vragen (min. ${DEPTH_MIN_CHARS} tekens).` });
+  if (qs.filter((x) => x.length >= DEPTH_MIN_CHARS).length < REQUIRED_DEPTH_ANSWERS) {
+    items.push({ title: "Depth-vragen", hint: `Beantwoord minstens ${REQUIRED_DEPTH_ANSWERS} vragen (min. ${DEPTH_MIN_CHARS} tekens).` });
   }
 
   return items;
@@ -185,6 +186,7 @@ export default async function DiscoverPage() {
       gender: true,
       createdAt: true,
       birthdate: true,
+      isPaused: true,
       photos: { select: { id: true } },
       profile: {
         select: {
@@ -205,35 +207,17 @@ export default async function DiscoverPage() {
 
   if (!me) redirect("/login");
 
-  if (!me.profile || !me.preferences) {
+  if (me.isPaused) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Discover</h1>
-            <p className="mt-1 text-sm opacity-70">Maak je profiel compleet om matches te zien.</p>
-          </div>
-          <DiscoverPreferencesOverlay />
-        </div>
-
-        <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
-          <div className="text-lg font-semibold">Nog niet klaar</div>
-          <p className="mt-2 text-sm opacity-75">Vul eerst je profiel in en stel daarna je datingvoorkeuren in.</p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Link href="/profile/me" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10">
-              Naar mijn profiel
-            </Link>
-            <Link
-              href="/profile/preferences"
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
-            >
-              Naar datingvoorkeuren
-            </Link>
-          </div>
-        </div>
+        <h1 className="text-2xl font-semibold">Je profiel staat op pauze</h1>
+        <p className="mt-2 max-w-xl text-sm opacity-70">Je profiel wordt niet voorgesteld aan nieuwe mensen. Zet het opnieuw actief via je profiel wanneer je klaar bent om verder te gaan.</p>
+        <Link href="/profile/me" className="mt-6 inline-flex rounded-2xl bg-emerald-300 px-4 py-2 text-sm font-semibold text-black">Profiel beheren</Link>
       </div>
     );
   }
+
+  const activeProfile = me.profile ?? { intent: "", religion: null, values: "[]", passions: "[]", q1: "", q2: "", q3: "", q4: "", q5: "" };
 
   const checklist = completenessChecklist({
     name: me.name,
@@ -242,7 +226,7 @@ export default async function DiscoverPage() {
     lat: (me.lat as number | null) ?? null,
     lng: (me.lng as number | null) ?? null,
     photosCount: me.photos?.length ?? 0,
-    profile: me.profile
+    profile: activeProfile
       ? {
           intent: me.profile.intent,
           values: me.profile.values,
@@ -256,45 +240,7 @@ export default async function DiscoverPage() {
       : null,
   });
 
-  if (checklist.length > 0) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-10">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Discover</h1>
-            <p className="mt-1 text-sm opacity-70">Vul je profiel volledig aan om profielen te kunnen ontdekken.</p>
-          </div>
-          <DiscoverPreferencesOverlay />
-        </div>
-
-        <section className="mt-8 rounded-3xl border border-amber-300/20 bg-amber-400/10 p-6">
-          <div className="text-lg font-semibold text-amber-50">Checklist</div>
-          <div className="mt-4 grid gap-2">
-            {checklist.map((it, i) => (
-              <div key={i} className="rounded-2xl border border-amber-200/10 bg-black/10 px-4 py-3">
-                <div className="text-sm font-semibold text-amber-50">{it.title}</div>
-                <div className="mt-1 text-sm text-amber-50/80">{it.hint}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link href="/profile/me" className="rounded-2xl bg-amber-400 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-300">
-              Profiel aanvullen
-            </Link>
-            <Link
-              href="/profile/preferences"
-              className="rounded-2xl border border-amber-200/20 bg-white/5 px-4 py-2 text-sm text-amber-50 hover:bg-white/10"
-            >
-              Datingvoorkeuren
-            </Link>
-          </div>
-        </section>
-      </div>
-    );
-  }
-
-  const prefs = me.preferences;
+  const prefs = me.preferences ?? { minAge: 18, maxAge: 99, maxDistanceKm: 50, genders: "[]", verifiedOnly: false };
   const minAge = Number(prefs.minAge ?? 18);
   const maxAge = Number(prefs.maxAge ?? 99);
   const maxDistanceKm = Number(prefs.maxDistanceKm ?? 50);
@@ -303,10 +249,10 @@ export default async function DiscoverPage() {
 
   const hasMyCoords = typeof me.lat === "number" && typeof me.lng === "number";
 
-  const myValues = safeJsonArray(me.profile.values);
-  const myPassions = safeJsonArray(me.profile.passions);
-  const myIntent = String(me.profile.intent || "");
-  const myReligion = me.profile.religion ? String(me.profile.religion) : null;
+  const myValues = safeJsonArray(activeProfile.values);
+  const myPassions = safeJsonArray(activeProfile.passions);
+  const myIntent = String(activeProfile.intent || "");
+  const myReligion = activeProfile.religion ? String(activeProfile.religion) : null;
 
   // Exclusions
   const seen = (await db.seenProfile.findMany({
@@ -378,6 +324,7 @@ export default async function DiscoverPage() {
       ...(hasMyCoords ? { lat: { not: null }, lng: { not: null } } : {}),
       ...(verifiedOnly ? { verified: true } : {}),
       isBlocked: false,
+      isPaused: false,
     },
     take: bufferTake,
     orderBy: { createdAt: "desc" },
@@ -490,12 +437,18 @@ export default async function DiscoverPage() {
   if (uniqueDiversified.length > 0) {
     await db
       .$transaction(async (tx: any) => {
-        const res = await tx.seenProfile.createMany({
-          data: uniqueDiversified.map((c) => ({ userId, seenUserId: c.id, dayKey: quota.dk })),
-          skipDuplicates: true,
-        });
-
-        newlyCount = res?.count ?? 0;
+        // SQLite's Prisma connector does not support createMany({ skipDuplicates }).
+        // Insert one record at a time and ignore the unique-key race for profiles
+        // that were already marked as seen. This keeps Discover functional in the
+        // local/self-hosted SQLite setup as well as in production databases.
+        for (const candidate of uniqueDiversified) {
+          try {
+            await tx.seenProfile.create({ data: { userId, seenUserId: candidate.id, dayKey: quota.dk } });
+            newlyCount += 1;
+          } catch {
+            // Another request may have inserted this exact unique record already.
+          }
+        }
 
         if (newlyCount > 0) {
           await consumeSeen(tx, userId, newlyCount);
@@ -513,10 +466,25 @@ export default async function DiscoverPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Discover</h1>
-          <p className="mt-1 text-sm opacity-70">Kies wie bij je past.</p>
+          <p className="mt-1 text-sm opacity-70">Kies wie bij je past. Je kunt je profiel onderweg verder verfijnen.</p>
         </div>
         <DiscoverPreferencesOverlay />
       </div>
+
+      {checklist.length > 0 ? (
+        <section className="mt-6 rounded-3xl border border-amber-300/20 bg-amber-400/10 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="font-semibold text-amber-50">Maak je profiel sterker</div>
+              <div className="mt-1 text-sm text-amber-50/75">Je ziet al profielen. Met deze stappen krijg je relevantere matches.</div>
+            </div>
+            <Link href="/profile/me" className="inline-flex rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-200">Profiel verbeteren</Link>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {checklist.slice(0, 3).map((it) => <span key={it.title} className="rounded-full border border-amber-100/15 bg-black/10 px-3 py-1 text-xs text-amber-50/80">{it.title}</span>)}
+          </div>
+        </section>
+      ) : null}
 
       <div className="mt-8">
         <DiscoverDeck

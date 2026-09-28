@@ -168,7 +168,7 @@ export default function VerifySelfiePage() {
       if (remainingSec <= 0) {
         // ✅ at 0: ALWAYS snap (no restart)
         stopCountdown();
-        if (status === "capturing") void snap("auto");
+        if (status === "capturing") void snap();
         return;
       }
 
@@ -423,7 +423,7 @@ export default function VerifySelfiePage() {
     return { useOx: oxRef.current, useOy: oyRef.current };
   }
 
-  async function snap(reason: "manual" | "auto" = "manual") {
+  async function snap() {
     setError(null);
 
     const v = videoRef.current;
@@ -713,7 +713,7 @@ export default function VerifySelfiePage() {
             <div className="mt-3">
               <button
                 type="button"
-                onClick={() => void snap("manual")}
+                onClick={() => void snap()}
                 disabled={!canSnap}
                 className={cls(
                   "w-full rounded-2xl border px-4 py-2 text-sm font-semibold transition",

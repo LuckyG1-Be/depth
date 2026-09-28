@@ -154,8 +154,13 @@ export default function RegisterPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-zinc-50">Registreren</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Telefoonverificatie is verplicht. De rest van je profiel vul je nadien aan.
+          In twee korte stappen maak je een veilig account. Je profiel kun je daarna rustig verder aanvullen.
         </p>
+        <div className="mt-4 flex items-center gap-2 text-xs text-zinc-500">
+          <span className="h-1.5 flex-1 rounded-full bg-emerald-400" />
+          <span className="h-1.5 flex-1 rounded-full bg-zinc-800" />
+          <span>Stap 1 van 2</span>
+        </div>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
@@ -170,9 +175,10 @@ export default function RegisterPage() {
             )}
           </div>
 
-          <label className="mt-3 block text-xs text-zinc-400">Telefoonnummer (E.164)</label>
+          <label htmlFor="register-phone" className="mt-3 block text-xs text-zinc-400">Telefoonnummer (E.164)</label>
           <div className="mt-1 flex gap-2">
             <input
+              id="register-phone"
               type="tel"
               value={phone}
               onChange={(e) => {
@@ -210,9 +216,10 @@ export default function RegisterPage() {
 
           {(stage === "sent" || stage === "busy") && (
             <>
-              <label className="mt-3 block text-xs text-zinc-400">Verificatiecode</label>
+              <label htmlFor="register-otp" className="mt-3 block text-xs text-zinc-400">Verificatiecode</label>
               <div className="mt-1 flex gap-2">
                 <input
+                  id="register-otp"
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6))}
                   placeholder="6 cijfers"
@@ -239,7 +246,7 @@ export default function RegisterPage() {
           )}
 
           <div className="mt-3 text-xs text-zinc-500">
-            Dev: verificatiecode staat in je terminal logs.
+            We gebruiken je nummer alleen voor accountveiligheid en sturen geen marketing zonder toestemming.
           </div>
         </div>
 
@@ -247,8 +254,9 @@ export default function RegisterPage() {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
           <div className="grid gap-3">
             <div>
-              <label className="block text-xs text-zinc-400">Voornaam</label>
+              <label htmlFor="register-name" className="block text-xs text-zinc-400">Voornaam</label>
               <input
+                id="register-name"
                 name="name"
                 required
                 className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
@@ -257,8 +265,9 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-zinc-400">E-mail</label>
+              <label htmlFor="register-email" className="block text-xs text-zinc-400">E-mail</label>
               <input
+                id="register-email"
                 name="email"
                 type="email"
                 required
@@ -268,8 +277,9 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-zinc-400">Wachtwoord</label>
+              <label htmlFor="register-password" className="block text-xs text-zinc-400">Wachtwoord</label>
               <input
+                id="register-password"
                 name="password"
                 type="password"
                 required
@@ -280,8 +290,9 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-zinc-400">Stad</label>
+              <label htmlFor="register-city" className="block text-xs text-zinc-400">Stad</label>
               <input
+                id="register-city"
                 name="city"
                 required
                 className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
@@ -290,8 +301,9 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-zinc-400">Geboortedatum</label>
+              <label htmlFor="register-birthdate" className="block text-xs text-zinc-400">Geboortedatum</label>
               <input
+                id="register-birthdate"
                 name="birthdate"
                 type="date"
                 required
@@ -355,4 +367,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-

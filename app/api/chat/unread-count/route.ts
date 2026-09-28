@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const session = await getSession();
-  if (!session?.user?.id) return NextResponse.json({ ok: false, count: 0 }, { status: 401 });
+  // The global header also renders on public pages, so an anonymous visitor
+  // should receive an empty counter rather than a noisy authentication error.
+  if (!session?.user?.id) return NextResponse.json({ ok: true, count: 0 }, { status: 200 });
 
   const userId = session.user.id;
 

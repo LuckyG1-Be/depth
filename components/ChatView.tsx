@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ToastProvider";
 import SafetyMenu from "@/components/SafetyMenu";
+import DateSafetyPlanner from "@/components/DateSafetyPlanner";
 
 type Msg = {
   id: string;
@@ -188,7 +189,7 @@ function UnlockProgress({
       <div className="mt-2 text-[11px] opacity-70">
         {locked ? (
           <>
-            Nog <b>{remaining}</b> wissel{remaining === 1 ? "" : "s"} tot foto-unlock (A-B-A-B-A-B).
+            Nog <b>{remaining}</b> wissel{remaining === 1 ? "" : "s"} tot foto-unlock (jullie allebei twee betekenisvolle antwoorden).
           </>
         ) : (
           "Foto’s zijn zichtbaar. Links worden normaal weergegeven."
@@ -235,7 +236,7 @@ export default function ChatView({
   const [isUnlocked, setIsUnlocked] = useState(Boolean(initial.isUnlocked));
   const [remaining, setRemaining] = useState<number>(initial.remaining ?? 0);
 
-  const unlockTotal = initial.unlockTotal ?? 5;
+  const unlockTotal = initial.unlockTotal ?? 4;
 
   const [isArchived, setIsArchived] = useState(Boolean(match.isArchived));
   const [archivedAt, setArchivedAt] = useState<string | null>(match.archivedAt || null);
@@ -408,6 +409,7 @@ export default function ChatView({
 
   const unlockedThumbs = other.photoIds.slice(0, 6).map((id) => `/api/photo/${id}`);
   const locked = !isUnlocked;
+  const contactInfoWarning = locked && /(https?:\/\/|www\.|@\w+|telegram|whatsapp|instagram|\+?\d[\d\s().-]{7,})/i.test(text);
 
   const remainingLabel = useMemo(() => {
     if (isArchived) return "Gearchiveerd";
@@ -417,11 +419,11 @@ export default function ChatView({
   }, [locked, remaining, isArchived]);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
+    <main className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:py-8">
       <Modal open={!!modalSrc} onClose={() => setModalSrc(null)} src={modalSrc || ""} />
       <UnlockCelebration open={celebrate} name={other.name} previewSrcs={unlockedThumbs.slice(0, 3)} onDone={() => setCelebrate(false)} />
 
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 sm:gap-6">
         <div className="flex items-center gap-4">
           <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
             {avatarOk ? (
@@ -437,7 +439,7 @@ export default function ChatView({
           </div>
 
           <div>
-            <div className="text-xl font-semibold">{other.name}</div>
+            <div className="text-lg font-semibold sm:text-xl">{other.name}</div>
             <div className="text-sm opacity-70">{other.city}</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {other.intent ? <Chip>{other.intent}</Chip> : null}
@@ -448,6 +450,7 @@ export default function ChatView({
         </div>
 
         <div className="flex items-center gap-3">
+          <span className="hidden text-xs font-semibold text-emerald-100/80 sm:inline">Veiligheid</span>
           <SafetyMenu otherUserId={other.id} context="chat" />
         </div>
       </div>
@@ -511,7 +514,7 @@ export default function ChatView({
             <div className="text-sm font-semibold opacity-80">Foto’s</div>
             {locked ? (
               <div className="mt-3 text-sm opacity-70">
-                Foto’s worden zichtbaar na 5 wissels (A-B-A-B-A-B).
+                Foto’s worden zichtbaar na twee betekenisvolle antwoorden van jullie allebei.
                 <div className="mt-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs opacity-80">
                   Tip: stel één vraag per bericht. Zo gaat de unlock sneller.
                 </div>
@@ -531,6 +534,8 @@ export default function ChatView({
               </div>
             )}
           </div>
+
+          <DateSafetyPlanner otherName={other.name} />
         </div>
 
         {/* Right: Messages */}
@@ -554,7 +559,7 @@ export default function ChatView({
               </button>
             </div>
 
-            <div ref={scrollerRef} className="max-h-[65vh] overflow-y-auto px-5 py-4">
+            <div ref={scrollerRef} className="max-h-[55vh] overscroll-contain overflow-y-auto px-4 py-4 sm:max-h-[65vh] sm:px-5">
               <div className="space-y-3">
                 {messages.map((m) => {
                   const mine = m.fromUserId === meId;
@@ -579,7 +584,8 @@ export default function ChatView({
               </div>
             </div>
 
-            <div className="border-t border-white/10 px-5 py-4">
+            <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+              {contactInfoWarning ? <div className="mb-3 rounded-2xl border border-amber-300/25 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">Voor je veiligheid raden we aan om contactgegevens pas buiten de app te delen wanneer je iemand voldoende vertrouwt.</div> : null}
               <div className="flex items-end gap-3">
                 <textarea
                   value={text}

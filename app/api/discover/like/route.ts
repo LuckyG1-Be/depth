@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { enforceMaxBodyBytes, rateLimitOrNull, getClientIp } from "@/lib/security";
@@ -12,7 +13,7 @@ type TxOut =
   | { ok: false; error: "LIKE_LIMIT" | "FAILED" | "INVALID" | "MISSING" };
 
 function isP2002(e: unknown) {
-  return typeof e === "object" && e !== null && (e as any).code === "P2002";
+  return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 }
 
 export async function POST(req: Request) {
@@ -37,6 +38,9 @@ export async function POST(req: Request) {
 
   if (!otherUserId) return NextResponse.json({ ok: false, error: "MISSING" }, { status: 400 });
   if (otherUserId === userId) return NextResponse.json({ ok: false, error: "INVALID" }, { status: 400 });
+
+  const target = await prisma.user.findUnique({ where: { id: otherUserId }, select: { id: true } });
+  if (!target) return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
 
   // block safety
   const blocked = await prisma.block.findFirst({
@@ -82,15 +86,19 @@ export async function POST(req: Request) {
       });
 
       if (!existing) {
-        await tx.match.create({
-          data: {
-            userAId: a,
-            userBId: b,
-            isUnlocked: false,
-            superlikeFromId: back.type === "SUPERLIKE" ? otherUserId : null,
-          },
-        });
-        matchCreated = true;
+        try {
+          await tx.match.create({
+            data: {
+              userAId: a,
+              userBId: b,
+              isUnlocked: false,
+              superlikeFromId: back.type === "SUPERLIKE" ? otherUserId : null,
+            },
+          });
+          matchCreated = true;
+        } catch (e) {
+          if (!isP2002(e)) throw e;
+        }
       }
     }
 

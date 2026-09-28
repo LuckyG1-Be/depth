@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.gitignore
+test-results
+playwright-report
+uploads
+data
+*.db
+*.db-journal
+.env*
+Dockerfile
+docker-compose.yml

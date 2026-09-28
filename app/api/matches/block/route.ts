@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import { withTx } from "@/lib/dbTx";
 import { getSession } from "@/lib/auth";
 import { enforceMaxBodyBytes, rateLimitOrNull } from "@/lib/security";
@@ -22,6 +23,9 @@ export async function POST(req: Request) {
 
   if (!otherId) return NextResponse.json({ ok: false, error: "MISSING_OTHER" }, { status: 400 });
   if (otherId === session.user.id) return NextResponse.json({ ok: false, error: "INVALID" }, { status: 400 });
+
+  const target = await prisma.user.findUnique({ where: { id: otherId }, select: { id: true } });
+  if (!target) return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
 
   const me = session.user.id;
 

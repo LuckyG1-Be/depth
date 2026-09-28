@@ -65,7 +65,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 export function useToast() {
   const ctx = useContext(ToastContext);
   if (!ctx) {
-    return { toast: (_t: Omit<Toast, "id">) => {} };
+    return { toast: () => {} };
   }
   return ctx;
 }

@@ -21,7 +21,7 @@ export type UnlockStateInput = {
   
   /**
    * Depth unlock rule:
-   * - Photos unlock after 5 alternating replies (turns).
+   * - Photos unlock after 4 alternating replies (two meaningful replies each).
    * - "Turn" means the sender differs from the previous message sender.
    * - Progress is tracked per side (A/B) and summed.
    *
@@ -61,10 +61,10 @@ export type UnlockStateInput = {
       };
     }
   
-    const nextA = isNewTurn && senderIsA ? Math.min(5, unlockProgressA + 1) : unlockProgressA;
-    const nextB = isNewTurn && senderIsB ? Math.min(5, unlockProgressB + 1) : unlockProgressB;
+    const nextA = isNewTurn && senderIsA ? Math.min(2, unlockProgressA + 1) : unlockProgressA;
+    const nextB = isNewTurn && senderIsB ? Math.min(2, unlockProgressB + 1) : unlockProgressB;
     const total = nextA + nextB;
-    const willUnlock = total >= 5;
+    const willUnlock = total >= 4;
   
     return {
       isNewTurn,
@@ -72,7 +72,7 @@ export type UnlockStateInput = {
       nextB,
       total,
       willUnlock,
-      unlockReason: willUnlock ? "5 alternatieve antwoorden behaald" : null,
+        unlockReason: willUnlock ? "Twee betekenisvolle antwoorden van jullie allebei" : null,
     };
   }
   

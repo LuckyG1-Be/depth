@@ -12,7 +12,7 @@ const DEPTH_QUESTIONS = [
   "Wat zien mensen vaak verkeerd aan jou?",
 ] as const;
 
-const UNLOCK_ALTERNATIONS_TOTAL = 5;
+const UNLOCK_ALTERNATIONS_TOTAL = 4;
 
 function safeJsonArray(raw: any): string[] {
   if (!raw) return [];

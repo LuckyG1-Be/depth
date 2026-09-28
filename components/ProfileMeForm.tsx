@@ -5,12 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ProfilePhotoManager, { type ProfilePhoto } from "@/components/ProfilePhotoManager";
 import { VALUES, PASSIONS } from "@/lib/profileOptions";
 import LocationAutocomplete, { type LocationValue } from "@/components/LocationAutocomplete";
+import PauseProfileToggle from "@/components/PauseProfileToggle";
 
 type Initial = {
   user: {
     name: string;
     city: string;
     gender: string;
+    isPaused: boolean;
     lat?: number | null;
     lng?: number | null;
     placeId?: string | null;
@@ -35,10 +37,12 @@ const RELIGIONS = ["Geen", "Christelijk", "Islam", "Joods", "Hindoe", "Boeddhist
 const GENDER_OPTIONS = ["Vrouw", "Man"];
 
 const REQUIRED_VALUES = 3;
-const REQUIRED_PASSIONS = 4;
+const REQUIRED_PASSIONS = 2;
+const MAX_PASSIONS = 8;
 
 const MIN_PHOTOS = 3;
 const DEPTH_MIN_CHARS = 25;
+const REQUIRED_DEPTH_ANSWERS = 3;
 
 function cls(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -69,7 +73,7 @@ function useDebouncedEffect(effect: () => void, deps: any[], delayMs: number) {
 }
 
 function depthOk(profile: Initial["profile"]) {
-  return [profile.q1, profile.q2, profile.q3, profile.q4, profile.q5].every((x) => x.trim().length >= DEPTH_MIN_CHARS);
+  return [profile.q1, profile.q2, profile.q3, profile.q4, profile.q5].filter((x) => x.trim().length >= DEPTH_MIN_CHARS).length >= REQUIRED_DEPTH_ANSWERS;
 }
 
 export default function ProfileMeForm({ initial }: { initial: Initial }) {
@@ -140,7 +144,7 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
 
     if (!profile.intent.trim()) e.intent = "Kies een intentie.";
     if (profile.values.length !== REQUIRED_VALUES) e.values = `Selecteer exact ${REQUIRED_VALUES} waarden.`;
-    if (profile.passions.length !== REQUIRED_PASSIONS) e.passions = `Selecteer exact ${REQUIRED_PASSIONS} passies.`;
+    if (profile.passions.length < REQUIRED_PASSIONS) e.passions = `Selecteer minstens ${REQUIRED_PASSIONS} passies.`;
 
     const qs = [
       ["q1", profile.q1],
@@ -150,10 +154,13 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
       ["q5", profile.q5],
     ] as const;
 
-    for (const [k, v] of qs) {
+    for (const [index, [k, v]] of qs.entries()) {
       const t = v.trim();
-      if (!t) e[k] = "Verplicht.";
-      else if (t.length < DEPTH_MIN_CHARS) e[k] = `Min. ${DEPTH_MIN_CHARS} tekens.`;
+      if (!t) {
+        if (index < REQUIRED_DEPTH_ANSWERS) e[k] = "Beantwoord minstens drie vragen.";
+      } else if (t.length < DEPTH_MIN_CHARS) {
+        e[k] = `Min. ${DEPTH_MIN_CHARS} tekens.`;
+      }
     }
 
     if (photoCount < MIN_PHOTOS) e.photos = `Upload min. ${MIN_PHOTOS} foto’s.`;
@@ -165,7 +172,7 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
     const basicsOk = user.name.trim().length > 0 && user.gender.trim().length > 0 && !!location;
     const intentOk = profile.intent.trim().length > 0;
     const valuesOk = profile.values.length === REQUIRED_VALUES;
-    const passionsOk = profile.passions.length === REQUIRED_PASSIONS;
+    const passionsOk = profile.passions.length >= REQUIRED_PASSIONS;
     const photosOk = photoCount >= MIN_PHOTOS;
     const depthAllOk = depthOk(profile);
     return basicsOk && intentOk && valuesOk && passionsOk && photosOk && depthAllOk;
@@ -183,10 +190,12 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
     if (errors.passions) items.push({ key: "passions", title: "Passies", hint: errors.passions, go: () => scrollTo(refValues) });
 
     const depthMissing = [errors.q1, errors.q2, errors.q3, errors.q4, errors.q5].some(Boolean);
-    if (depthMissing) items.push({ key: "depth", title: "Depth-vragen", hint: "Vul alle vragen in.", go: () => scrollTo(refDepth) });
+    if (depthMissing) items.push({ key: "depth", title: "Depth-vragen", hint: `Beantwoord minstens ${REQUIRED_DEPTH_ANSWERS} vragen.`, go: () => scrollTo(refDepth) });
 
     return items;
   }, [errors]);
+
+  const completion = Math.max(0, Math.min(100, Math.round((1 - Object.keys(errors).length / 8) * 100)));
 
   async function saveUser(partial: Partial<Initial["user"]>) {
     setGlobalError(null);
@@ -316,14 +325,29 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
         >
           Naar Discover
         </Link>
+        <Link
+          href="/profile/preview"
+          className="inline-flex items-center justify-center rounded-2xl border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/15"
+        >
+          Bekijk profielpreview
+        </Link>
       </div>
+
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3"><div><div className="text-sm font-semibold">Profielsterkte</div><div className="mt-1 text-xs opacity-65">Een sterk profiel maakt een eerste bericht makkelijker.</div></div><div className="text-lg font-semibold text-emerald-200">{completion}%</div></div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-300 transition-[width]" style={{ width: `${completion}%` }} /></div>
+      </div>
+
+      <nav className="sticky top-2 z-20 -mx-1 flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-[#1e1b27]/90 p-2 backdrop-blur md:hidden" aria-label="Profielsecties">
+        {[{ label: "Basis", ref: refBasics }, { label: "Waarden", ref: refValues }, { label: "Vragen", ref: refDepth }, { label: "Foto’s", ref: refPhotos }].map(({ label, ref }) => <button key={label} type="button" onClick={() => scrollTo(ref)} className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold">{label}</button>)}
+      </nav>
 
       {/* Checklist alleen als het niet compleet is */}
       {!isComplete ? (
         <section className="rounded-3xl border border-amber-300/20 bg-amber-400/10 p-6">
           <div className="flex flex-col gap-1">
-            <div className="text-lg font-semibold text-amber-50">Nog niet klaar</div>
-            <div className="text-sm text-amber-50/90">Vul onderstaande items aan om Discover te ontgrendelen.</div>
+            <div className="text-lg font-semibold text-amber-50">Maak je profiel herkenbaar</div>
+            <div className="text-sm text-amber-50/90">Je kunt al Discover bekijken. Deze stappen helpen anderen om sneller op jou te reageren.</div>
           </div>
 
           <div className="mt-4 grid gap-2">
@@ -346,7 +370,7 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
       ) : null}
 
       {/* Basis */}
-      <section ref={refBasics} className="rounded-3xl border border-white/10 bg-white/5 p-6">
+      <section ref={refBasics} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <h2 className="text-lg font-semibold">Mijn profiel</h2>
         <p className="mt-1 text-sm opacity-70">Naam, gender en stad (nodig voor afstand).</p>
 
@@ -437,10 +461,10 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
       </section>
 
       {/* Waarden & passies */}
-      <section ref={refValues} className="rounded-3xl border border-white/10 bg-white/5 p-6">
+      <section ref={refValues} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <h2 className="text-lg font-semibold">Waarden & passies</h2>
-        <div className="mt-2 text-sm opacity-75">
-          Kies exact <b>{REQUIRED_VALUES}</b> waarden en <b>{REQUIRED_PASSIONS}</b> passies.
+          <div className="mt-2 text-sm opacity-75">
+          Kies <b>{REQUIRED_VALUES}</b> waarden en minstens <b>{REQUIRED_PASSIONS}</b> passies die bij je passen.
         </div>
 
         <div className="mt-5 grid gap-6">
@@ -485,21 +509,21 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold">Passies</div>
               <div className={cls("text-xs", errors.passions ? "text-red-300" : "opacity-70")}>
-                {profile.passions.length}/{REQUIRED_PASSIONS}
+                {profile.passions.length}/{MAX_PASSIONS}
               </div>
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
               {PASSIONS.map((p) => {
                 const on = profile.passions.includes(p);
-                const disabled = !on && profile.passions.length >= REQUIRED_PASSIONS;
+                const disabled = !on && profile.passions.length >= MAX_PASSIONS;
 
                 return (
                   <button
                     key={p}
                     type="button"
                     disabled={disabled}
-                    onClick={() => setProfile((s) => ({ ...s, passions: togglePick(s.passions, p, REQUIRED_PASSIONS) }))}
+                    onClick={() => setProfile((s) => ({ ...s, passions: togglePick(s.passions, p, MAX_PASSIONS) }))}
                     className={cls(
                       "rounded-full border px-3 py-1.5 text-sm transition",
                       on
@@ -521,10 +545,10 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
       </section>
 
       {/* Depth */}
-      <section ref={refDepth} className="rounded-3xl border border-white/10 bg-white/5 p-6">
+      <section ref={refDepth} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div>
           <h2 className="text-lg font-semibold">Depth-vragen</h2>
-          <p className="mt-1 text-sm opacity-75">Min. {DEPTH_MIN_CHARS} tekens per vraag.</p>
+          <p className="mt-1 text-sm opacity-75">Beantwoord minstens {REQUIRED_DEPTH_ANSWERS} vragen, telkens met minimaal {DEPTH_MIN_CHARS} tekens. De rest is optioneel.</p>
         </div>
 
         <div className="mt-5 grid gap-4">
@@ -591,8 +615,10 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
         </div>
 
         <div className="mt-4 text-xs opacity-70">
-          Door je account te gebruiken ga je akkoord met ons privacybeleid en het verwerken van noodzakelijke data voor matching & veiligheid.
+          Door je account te gebruiken ga je akkoord met de verwerking van noodzakelijke data voor matching & veiligheid. Bekijk ook onze <Link href="/privacy" className="underline">privacy-informatie</Link> en <Link href="/safety" className="underline">veiligheidsrichtlijnen</Link>.
         </div>
+
+        <PauseProfileToggle initialPaused={user.isPaused} />
 
         {confirmDeleteOpen ? (
           <div className="mt-5 rounded-2xl border border-red-500/20 bg-red-500/10 p-4">

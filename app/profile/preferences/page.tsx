@@ -29,6 +29,12 @@ export default async function PreferencesPage() {
       <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <DatingPreferencesForm variant="page" />
       </div>
+
+      <section className="rounded-3xl border border-white/10 bg-white/5 p-5">
+        <h3 className="font-semibold">Privacy in gewone taal</h3>
+        <p className="mt-2 text-sm leading-6 opacity-70">Je exacte locatie wordt niet aan andere gebruikers getoond. Je nummer blijft privé en je kunt je profiel op elk moment pauzeren via Mijn profiel.</p>
+        <Link href="/privacy" className="mt-3 inline-flex text-sm font-semibold text-emerald-200 underline">Bekijk alle privacy-informatie</Link>
+      </section>
     </div>
   );
 }

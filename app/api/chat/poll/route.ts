@@ -40,7 +40,7 @@ async function computeUnlock(matchId: string) {
 
   const meaningfulSenderIds = all.filter((m) => isMeaningful(m.text)).map((m) => m.fromUserId);
   const alternations = countAlternations(meaningfulSenderIds);
-  const remaining = Math.max(0, 5 - alternations);
+  const remaining = Math.max(0, 4 - alternations);
 
   return { alternations, remaining };
 }

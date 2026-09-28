@@ -13,10 +13,6 @@ function boolEnv(name: string, fallback: boolean) {
   return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
 // Heel basic email check (later kan strenger)
 function isValidEmail(email: string) {
   const e = email.trim().toLowerCase();

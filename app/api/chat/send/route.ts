@@ -62,7 +62,7 @@ async function computeUnlock(matchId: string) {
 
   const meaningfulSenderIds = all.filter((m) => isMeaningful(m.text)).map((m) => m.fromUserId);
   const alternations = countAlternations(meaningfulSenderIds);
-  const remaining = Math.max(0, 5 - alternations);
+  const remaining = Math.max(0, 4 - alternations);
 
   return { alternations, remaining };
 }
@@ -218,7 +218,7 @@ export async function POST(req: Request) {
 
   let isUnlocked = match.isUnlocked;
 
-  if (!isUnlocked && unlockInfo.alternations >= 5) {
+  if (!isUnlocked && unlockInfo.alternations >= 4) {
     await prisma.match.update({
       where: { id: matchId },
       data: { isUnlocked: true, unlockedAt: new Date() },

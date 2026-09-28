@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const religion = String(p.religion || "").trim() || null;
 
   const values = clampJsonArray(p.values, 3);
-  const passions = clampJsonArray(p.passions, 4);
+  const passions = clampJsonArray(p.passions, 8);
 
   const q1 = String(p.q1 || "");
   const q2 = String(p.q2 || "");

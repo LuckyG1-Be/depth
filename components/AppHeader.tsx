@@ -26,7 +26,7 @@ function IconBtn({
       aria-label={label}
       className={[
         "group inline-flex items-center justify-center",
-        "h-14 w-14 rounded-3xl",
+        "h-11 w-11 rounded-3xl sm:h-14 sm:w-14",
         "border-2",
         "transition-transform duration-150",
         "hover:scale-105 active:scale-95",
@@ -74,12 +74,20 @@ function PersonIcon() {
   );
 }
 
+function PlusIcon() {
+  return <span className="text-xl font-bold" style={{ color: GREEN }}>✦</span>;
+}
+
+function HeartIcon() {
+  return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 22l7.8-8.6 1-1a5.5 5.5 0 0 0 0-7.8z" /></svg>;
+}
+
 function HeartPill({ count }: { count: number }) {
   return (
     <div
       className={[
-        "inline-flex items-center gap-3",
-        "h-14 rounded-3xl px-5",
+        "inline-flex items-center gap-2",
+        "h-11 rounded-3xl px-3 sm:h-14 sm:gap-3 sm:px-5",
         "border-2",
         "select-none",
       ].join(" ")}
@@ -89,10 +97,22 @@ function HeartPill({ count }: { count: number }) {
         <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 22l7.8-8.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
       </svg>
 
-      <div className="text-xl font-semibold" style={{ color: "white" }}>
+      <div className="text-lg font-semibold sm:text-xl" style={{ color: "white" }}>
         {count}
       </div>
     </div>
+  );
+}
+
+function MobileNavItem({ href, label, active, badge, children }: { href: string; label: string; active: boolean; badge?: number; children: React.ReactNode }) {
+  return (
+    <Link href={href} aria-label={label} aria-current={active ? "page" : undefined} className={active ? "text-emerald-200" : "text-white/55"}>
+      <span className="relative flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 text-[11px] font-semibold">
+        {children}
+        {badge && badge > 0 ? <span className="absolute right-1 top-0 inline-flex min-w-4 items-center justify-center rounded-full bg-emerald-300 px-1 text-[10px] font-bold text-[#1e1b27]">{badge > 99 ? "99+" : badge}</span> : null}
+        <span>{label}</span>
+      </span>
+    </Link>
   );
 }
 
@@ -155,6 +175,8 @@ export default function AppHeader() {
   const activeDiscover = pathname.startsWith("/discover");
   const activeChat = pathname.startsWith("/chat");
   const activeProfile = pathname.startsWith("/profile");
+  const activeMatches = pathname.startsWith("/matches");
+  const isLanding = pathname === "/";
 
   return (
     <header
@@ -164,18 +186,28 @@ export default function AppHeader() {
         borderColor: "rgba(255,255,255,0.08)",
       }}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-4 sm:px-6 sm:py-6">
         {/* Left: logo + tagline */}
-        <div className="flex items-center gap-5">
-          <img src="/depth-logo.svg" alt="Depth" className="h-20 w-auto" />
+        <div className="flex min-w-0 shrink items-center gap-2 sm:gap-5">
+          <img src="/depth-logo.svg" alt="Depth" className="h-10 w-auto shrink-0 sm:h-20" />
           <div className="hidden sm:block">
             <div className="text-lg font-medium" style={{ color: GREEN }}>
             </div>
           </div>
         </div>
 
-        {/* Right: icons */}
-        <nav className="flex items-center gap-4">
+        {/* Right: context action + icons */}
+        <div className="hidden items-center gap-3 md:flex">
+          <Link
+            href={isLanding ? "/register" : "/safety"}
+            className={isLanding
+              ? "inline-flex min-h-11 items-center rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-[#1e1b27] transition hover:bg-emerald-100"
+              : "inline-flex min-h-11 items-center rounded-2xl border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15"}
+          >
+            {isLanding ? "Start gratis" : "Veiligheid"}
+          </Link>
+
+          <nav className="flex shrink-0 items-center gap-2 sm:gap-4">
           <IconBtn href="/discover" active={activeDiscover} label="Discover">
             <SearchIcon />
           </IconBtn>
@@ -194,14 +226,27 @@ export default function AppHeader() {
             </div>
           </IconBtn>
 
+          <IconBtn href="/plus" active={pathname.startsWith("/plus")} label="Depth Plus">
+            <PlusIcon />
+          </IconBtn>
+
           {/* Not clickable */}
           <HeartPill count={likes} />
 
           <IconBtn href="/profile" active={activeProfile} label="Profiel">
             <PersonIcon />
           </IconBtn>
-        </nav>
+          </nav>
+        </div>
       </div>
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#1e1b27]/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur-xl md:hidden">
+        <div className="mx-auto flex max-w-md items-center justify-around">
+          <MobileNavItem href="/discover" label="Discover" active={activeDiscover}><SearchIcon /></MobileNavItem>
+          <MobileNavItem href="/matches" label="Likes" active={activeMatches} badge={likes}><HeartIcon /></MobileNavItem>
+          <MobileNavItem href="/chat" label="Chat" active={activeChat} badge={unread}><ChatIcon /></MobileNavItem>
+          <MobileNavItem href="/profile" label="Profiel" active={activeProfile}><PersonIcon /></MobileNavItem>
+        </div>
+      </nav>
     </header>
   );
 }

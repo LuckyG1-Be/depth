@@ -47,11 +47,16 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") || "").trim().toLowerCase();
 
-  const dbCities = await prisma.user.findMany({
-    distinct: ["city"],
-    select: { city: true },
-    take: 500,
-  });
+  let dbCities: Array<{ city: string }> = [];
+  try {
+    dbCities = await prisma.user.findMany({
+      distinct: ["city"],
+      select: { city: true },
+      take: 500,
+    });
+  } catch {
+    // Public autocomplete remains useful during first boot or a temporary DB outage.
+  }
 
   const all = Array.from(new Set([...SEED, ...dbCities.map((x) => x.city).filter(Boolean)]));
 
@@ -63,4 +68,3 @@ export async function GET(req: Request) {
 
   return NextResponse.json({ cities: filtered });
 }
-

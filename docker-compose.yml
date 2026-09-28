@@ -1,0 +1,27 @@
+services:
+  depth:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/app/data/depth.db
+      UPLOAD_DIR: /app/uploads
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - depth-data:/app/data
+      - depth-uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  depth-data:
+  depth-uploads:

@@ -62,7 +62,7 @@ export default function VerifyPhonePage() {
           DEPTH vereist één geverifieerd nummer per account om fake profielen te beperken.
         </p>
         <p className="mt-2 text-xs text-zinc-400">
-          Dev: de code staat in je terminal logs (later koppel je SMS-provider).
+          Je nummer wordt alleen gebruikt voor accountveiligheid. We delen het niet met andere gebruikers.
         </p>
       </div>
 
@@ -123,4 +123,3 @@ export default function VerifyPhonePage() {
     </div>
   );
 }
-

@@ -264,6 +264,7 @@ export default function DiscoverDeck({
     if (busy) return;
 
     setBusy(true);
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(action === "PASS" ? 8 : 16);
 
     const endpoint = action === "LIKE" ? "/api/discover/like" : action === "PASS" ? "/api/discover/pass" : "/api/discover/superlike";
 
@@ -356,10 +357,10 @@ export default function DiscoverDeck({
       : null;
 
   return (
-    <div className="grid gap-6 pb-28">
+    <div className="grid gap-6 pb-48 md:pb-28">
       <DiscoverMatchConfetti fire={fireMatch} />
 
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="text-sm text-white/70">Vandaag gezien</div>
           <div className="text-lg font-semibold">
@@ -368,7 +369,7 @@ export default function DiscoverDeck({
           <div className="mt-1 text-xs text-white/55">⌨︎ ← pass • → like • ↑ super • ? waarom</div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {verifiedOnlyActive ? <VerifiedOnlyPill /> : null}
 
           <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2">
@@ -420,8 +421,9 @@ export default function DiscoverDeck({
       >
         {burst ? <ActionBurst kind={burst} /> : null}
 
-        <div className="relative h-[260px] w-full bg-black/20 sm:h-[300px]">
+        <div className="relative h-[min(58vh,480px)] min-h-[300px] w-full bg-black/20 sm:h-[300px]">
           <div className="absolute right-4 top-4 z-30">
+            <span className="sr-only">Veiligheid voor dit profiel</span>
             <SafetyMenu otherUserId={current.id} context="discover" />
           </div>
 
@@ -497,8 +499,8 @@ export default function DiscoverDeck({
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-white/55">Waarden</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                {current.values.map((v) => (
-                  <ValueChip key={v}>{v}</ValueChip>
+                {current.values.map((v, i) => (
+                  <ValueChip key={`${v}-${i}`}>{v}</ValueChip>
                 ))}
               </div>
             </div>
@@ -506,8 +508,8 @@ export default function DiscoverDeck({
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-white/55">Passies</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                {current.passions.map((p) => (
-                  <PassionChip key={p}>{p}</PassionChip>
+                {current.passions.map((p, i) => (
+                  <PassionChip key={`${p}-${i}`}>{p}</PassionChip>
                 ))}
               </div>
             </div>
@@ -556,7 +558,7 @@ export default function DiscoverDeck({
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 backdrop-blur" style={{ backgroundColor: "rgba(30,27,39,0.92)" }}>
+      <div className="fixed inset-x-0 bottom-20 z-40 border-t border-white/10 backdrop-blur md:bottom-0" style={{ backgroundColor: "rgba(30,27,39,0.96)" }}>
         <div className="mx-auto max-w-5xl px-4 sm:px-6 py-4">
           <div className="flex gap-3">
             <IconPill tone="pass" label="Overslaan" onClick={() => void act("PASS")} disabled={busy} icon={<XIcon />} />

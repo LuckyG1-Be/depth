@@ -6,8 +6,6 @@ import { Resend } from "resend";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 function sha256(s: string) {
   return createHash("sha256").update(s).digest("hex");
 }
@@ -27,6 +25,14 @@ export async function POST(req: Request) {
   const code = generateCode();
   const codeHash = sha256(code);
 
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    return NextResponse.json(
+      { ok: false, error: "EMAIL_NOT_CONFIGURED" },
+      { status: 503 },
+    );
+  }
+
   await prisma.emailOtp.upsert({
     where: { email },
     create: {
@@ -41,6 +47,7 @@ export async function POST(req: Request) {
     },
   });
 
+  const resend = new Resend(resendApiKey);
   await resend.emails.send({
     from: process.env.APP_EMAIL_FROM!,
     to: email,

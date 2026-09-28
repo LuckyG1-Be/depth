@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useToast } from "@/components/ToastProvider";
 
 type Reason =
@@ -205,6 +206,7 @@ export default function SafetyMenu({
                   </button>
 
                   <div className="text-xs text-white/55">Blokkeren is stil — de andere persoon krijgt geen melding.</div>
+                  <Link href="/safety" onClick={() => setOpen(false)} className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-left text-sm text-emerald-100 hover:bg-emerald-400/15">Lees de veiligheidsrichtlijnen</Link>
                 </div>
               )}
 

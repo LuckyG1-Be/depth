@@ -12,7 +12,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-[#1e1b27] text-white">
+      <div className={`min-h-screen bg-[#1e1b27] text-white ${hide ? "" : "pb-20 md:pb-0"}`}>
         {!hide ? <AppHeader /> : null}
         {children}
       </div>

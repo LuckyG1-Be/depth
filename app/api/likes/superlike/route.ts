@@ -2,17 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { enforceMaxBodyBytes, rateLimitOrNull } from "@/lib/security";
+import { dayKeyBrussels } from "@/lib/dayKey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function dayKeyNow() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
 
 export async function POST(req: Request) {
   const tooBig = await enforceMaxBodyBytes(req, 20_000);
@@ -50,7 +43,7 @@ export async function POST(req: Request) {
   }
 
   // 20 profielen/dag: superlike telt mee als "gezien"
-  const key = dayKeyNow();
+  const key = dayKeyBrussels();
   const SEEN_LIMIT = 20;
 
   const seenCount = await prisma.seenProfile.count({ where: { userId, dayKey: key } });

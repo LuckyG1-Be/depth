@@ -62,6 +62,7 @@ export default async function ProfileMePage() {
       lng: true,
       placeId: true,
       verified: true,
+      isPaused: true,
       profile: {
         select: {
           intent: true,
@@ -112,6 +113,7 @@ export default async function ProfileMePage() {
         lng: true,
         placeId: true,
         verified: true,
+        isPaused: true,
         profile: {
           select: {
             intent: true,
@@ -185,6 +187,7 @@ export default async function ProfileMePage() {
             name: me.name || "",
             city: me.city || "",
             gender: me.gender || "",
+            isPaused: me.isPaused,
             lat: me.lat ?? null,
             lng: me.lng ?? null,
             placeId: me.placeId ?? null,

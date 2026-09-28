@@ -2,18 +2,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { enforceMaxBodyBytes, rateLimitOrNull } from "@/lib/security";
+import { enforceMaxBodyBytes, getClientIp, rateLimitOrNull } from "@/lib/security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function toFloatOrNull(v: any): number | null {
+function toFloatOrNull(v: unknown): number | null {
   if (v == null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-function toStr(v: any) {
+function toStr(v: unknown) {
   return typeof v === "string" ? v : "";
 }
 
@@ -21,21 +21,26 @@ export async function POST(req: Request) {
   const tooBig = await enforceMaxBodyBytes(req, 25_000);
   if (tooBig) return tooBig;
 
-  const rl = await rateLimitOrNull({ key: "loc_update", limit: 30, windowMs: 60_000 });
-  if (rl) return rl;
-
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ ok: false, error: "UNAUTH" }, { status: 401 });
   const userId = session.user.id;
+
+  const rl = await rateLimitOrNull({
+    key: `loc_update:${userId}:${getClientIp(req)}`,
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (rl) return rl;
 
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
   }
 
-  const lat = toFloatOrNull((body as any).lat);
-  const lng = toFloatOrNull((body as any).lng);
-  const city = toStr((body as any).city).trim(); // optioneel label
+  const input = body as { lat?: unknown; lng?: unknown; city?: unknown };
+  const lat = toFloatOrNull(input.lat);
+  const lng = toFloatOrNull(input.lng);
+  const city = toStr(input.city).trim(); // optioneel label
 
   if (lat == null || lng == null) {
     return NextResponse.json({ ok: false, error: "MISSING_COORDS" }, { status: 400 });

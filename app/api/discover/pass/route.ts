@@ -28,6 +28,9 @@ export async function POST(req: Request) {
   if (!otherUserId) return NextResponse.json({ ok: false, error: "MISSING" }, { status: 400 });
   if (otherUserId === userId) return NextResponse.json({ ok: false, error: "INVALID" }, { status: 400 });
 
+  const target = await prisma.user.findUnique({ where: { id: otherUserId }, select: { id: true } });
+  if (!target) return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
+
   // ✅ pass is idempotent; seenUsed wordt al op /discover afgerekend
   // we markeren wel "seen" voor zekerheid (skip duplicate)
   const dk = dayKeyBrussels();
