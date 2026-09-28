@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
-  const token = cookies().get(PHONE_VERIFY_COOKIE)?.value;
+  const token = (await cookies()).get(PHONE_VERIFY_COOKIE)?.value;
   if (!token) return NextResponse.json({ ok: false });
 
   const phone = await verifyPhoneVerifyToken(token);
@@ -14,4 +14,3 @@ export async function GET(): Promise<Response> {
 
   return NextResponse.json({ ok: true, phone });
 }
-

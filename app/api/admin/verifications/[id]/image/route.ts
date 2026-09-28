@@ -39,7 +39,7 @@ function parseJsonArray(raw: string | null | undefined): string[] {
   }
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!sameOrigin(req)) return NextResponse.json({ error: "SAME_ORIGIN" }, { status: 403 });
 
   const ok = await requireAdmin();
@@ -48,8 +48,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const url = new URL(req.url);
   const idx = Math.max(0, parseInt(url.searchParams.get("i") || "0", 10) || 0);
 
+  const { id } = await params;
   const row = await prisma.verificationRequest.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { selfiePath: true, selfiePaths: true },
   });
   if (!row) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });

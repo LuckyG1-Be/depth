@@ -21,14 +21,14 @@ function clampInt(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isSameOrigin(req)) return NextResponse.json({ error: "SAME_ORIGIN" }, { status: 403 });
 
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
   const viewerId = session.user.id;
 
-  const id = params.id;
+  const { id } = await params;
 
   const url = new URL(req.url);
   const wRaw = url.searchParams.get("w");

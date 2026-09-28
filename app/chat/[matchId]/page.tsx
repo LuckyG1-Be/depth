@@ -27,12 +27,12 @@ function safeJsonArray(raw: any): string[] {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function ChatMatchPage({ params }: { params: { matchId: string } }) {
+export default async function ChatMatchPage({ params }: { params: Promise<{ matchId: string }> }) {
   const session = await getSession();
   if (!session?.user?.id) redirect("/login");
 
   const userId = session.user.id;
-  const matchId = params.matchId;
+  const { matchId } = await params;
 
   const match = await prisma.match.findUnique({
     where: { id: matchId },

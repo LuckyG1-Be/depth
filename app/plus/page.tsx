@@ -15,7 +15,8 @@ const benefits = [
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function PlusPage({ searchParams }: { searchParams?: { checkout?: string } }) {
+export default async function PlusPage({ searchParams }: { searchParams?: Promise<{ checkout?: string }> }) {
+  const query = await searchParams;
   const session = await getSession();
   if (!session?.user?.id) redirect("/login");
 
@@ -44,8 +45,8 @@ export default async function PlusPage({ searchParams }: { searchParams?: { chec
           <ul className="mt-7 grid gap-4">
             {benefits.map((benefit) => <li key={benefit} className="flex gap-3 text-sm text-white/85"><span className="text-emerald-300">✓</span>{benefit}</li>)}
           </ul>
-          {searchParams?.checkout === "success" ? <p className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm text-emerald-100">Betaling ontvangen. Je Plus-status wordt automatisch geactiveerd.</p> : null}
-          {searchParams?.checkout === "cancelled" ? <p className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">Geen probleem — er is niets aangerekend.</p> : null}
+          {query?.checkout === "success" ? <p className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm text-emerald-100">Betaling ontvangen. Je Plus-status wordt automatisch geactiveerd.</p> : null}
+          {query?.checkout === "cancelled" ? <p className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">Geen probleem — er is niets aangerekend.</p> : null}
           {active ? <p className="mt-5 text-sm text-emerald-200">Je hebt Plus{subscription?.cancelAtPeriodEnd ? " en het loopt af aan het einde van je huidige periode" : " actief"}.</p> : null}
           <PlusActions hasSubscription={active} />
         </section>

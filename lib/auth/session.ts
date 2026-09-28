@@ -14,7 +14,7 @@ export type SessionUser = {
 export type Session = { user: SessionUser };
 
 export async function getSession(): Promise<Session | null> {
-  const token = cookies().get(AUTH_COOKIE)?.value;
+  const token = (await cookies()).get(AUTH_COOKIE)?.value;
   if (!token) return null;
 
   const payload = await verifyAuthToken(token);
@@ -28,4 +28,3 @@ export async function getSession(): Promise<Session | null> {
   if (!user) return null;
   return { user };
 }
-

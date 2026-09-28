@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { logSecurityEvent } from "./risk";
 import type { SecurityEventType } from "./types";
-
-const prisma = new PrismaClient();
 
 export async function guardUserAction(req: Request, userId: string, action: SecurityEventType) {
   const user = await prisma.user.findUnique({ where: { id: userId } });

@@ -1,5 +1,14 @@
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  webpack(config) {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+    };
+    return config;
+  },
   poweredByHeader: false,
   eslint: {
     ignoreDuringBuilds: true,
@@ -21,5 +30,9 @@ const nextConfig = {
     ];
   },
 };
+
+if (process.env.NODE_ENV === "development") {
+  initOpenNextCloudflareForDev();
+}
 
 export default nextConfig;

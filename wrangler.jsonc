@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "depth",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-28",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "r2_buckets": [
+    { "binding": "UPLOADS", "bucket_name": "depth-private" }
+  ],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "depth-prod",
+    "database_id": "694bc124-5c39-4036-a0b5-2e297f69667b"
+  }],
+  "observability": { "enabled": true }
+}

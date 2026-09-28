@@ -1,12 +1,12 @@
 import { Card } from "@/components/Card";
 import Link from "next/link";
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: Promise<{ error?: string }>;
 }) {
-  const error = searchParams?.error;
+  const error = (await searchParams)?.error;
 
   const message =
     error === "invalid"
@@ -65,6 +65,5 @@ export default function LoginPage({
     </main>
   );
 }
-
 
 

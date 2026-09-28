@@ -18,11 +18,11 @@ async function requireAdmin() {
   return me;
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ ok: false, error: "FORBIDDEN" }, { status: 403 });
 
-  const id = params.id;
+  const { id } = await params;
 
   const form = await req.formData().catch(() => null);
   const action = String(form?.get("action") || "");

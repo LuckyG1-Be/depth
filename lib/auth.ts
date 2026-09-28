@@ -70,7 +70,7 @@ export function clearSession(res: NextResponse, reqUrl: string) {
 }
 
 export async function getSession(): Promise<AuthSession | null> {
-  const token = cookies().get(AUTH_COOKIE)?.value;
+  const token = (await cookies()).get(AUTH_COOKIE)?.value;
   if (!token) return null;
 
   const userId = await verifyToken(token);
@@ -78,7 +78,6 @@ export async function getSession(): Promise<AuthSession | null> {
 
   return { user: { id: userId } };
 }
-
 
 
 
