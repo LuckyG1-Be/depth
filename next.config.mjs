@@ -4,6 +4,7 @@ import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 const nextConfig = {
   output: "standalone",
   outputFileTracingRoot: process.cwd(),
+  serverExternalPackages: ["@prisma/client", ".prisma/client"],
   webpack(config) {
     config.experiments = {
       ...config.experiments,

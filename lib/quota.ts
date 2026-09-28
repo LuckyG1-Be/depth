@@ -1,5 +1,5 @@
 // lib/quota.ts
-import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { dayKeyBrussels } from "@/lib/dayKey";
 
 export const DAILY_SEEN_LIMIT = 20;
