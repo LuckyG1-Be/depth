@@ -1,4 +1,5 @@
 import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
 import Link from "next/link";
 
 export default async function LoginPage({
@@ -16,25 +17,25 @@ export default async function LoginPage({
       : null;
 
   return (
-    <main className="min-h-screen w-full bg-black px-6 py-10">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-start justify-center sm:items-center">
-        <Card className="w-full max-w-md">
-          <h1 className="text-xl font-semibold text-zinc-50">Login</h1>
+    <main className="min-h-screen w-full bg-[#1e1b27] px-4 py-[max(24px,env(safe-area-inset-top))] sm:px-6 sm:py-10">
+      <div className="mx-auto flex min-h-[calc(100svh-3rem)] max-w-6xl items-center justify-center">
+        <Card className="w-full max-w-md p-5 sm:p-6">
+          <div className="mb-6 text-center"><img src="/depth-logo.svg" alt="Depth" className="mx-auto h-14 w-auto" /><p className="mt-4 text-sm font-medium text-emerald-100/85">Diepere matches. Foto’s pas na echte connectie.</p></div>
 
           {message && (
-            <div className="mt-4 rounded-xl border border-red-900 bg-red-950 px-3 py-2 text-sm text-red-200">
+            <div className="mb-4 rounded-2xl border border-red-300/25 bg-red-400/10 px-4 py-3 text-sm text-red-50">
               {message}
             </div>
           )}
 
-          <form action="/api/auth/login" method="post" className="mt-4 grid gap-3">
+          <form action="/api/auth/login" method="post" className="grid gap-3">
             <input
               type="email"
               name="email"
               placeholder="E-mailadres"
               required
               autoComplete="email"
-              className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+              className="depth-input w-full px-4 py-3 text-sm placeholder:text-white/30"
             />
 
             <input
@@ -43,27 +44,22 @@ export default async function LoginPage({
               placeholder="Wachtwoord"
               required
               autoComplete="current-password"
-              className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+              className="depth-input w-full px-4 py-3 text-sm placeholder:text-white/30"
             />
 
-            <button
-              type="submit"
-              className="rounded-xl bg-white px-4 py-2 font-medium text-zinc-900 hover:bg-zinc-200"
-            >
-              Inloggen
-            </button>
+            <Button type="submit" className="w-full">Inloggen</Button>
           </form>
 
-          <p className="mt-4 text-sm text-zinc-400">
+          <div className="mt-5 flex flex-col gap-2 text-center text-sm text-white/50">
             Nog geen account?{" "}
-            <Link href="/register" className="underline text-zinc-100">
-              Registreer hier
+            <Link href="/register" className="font-semibold text-white underline decoration-white/25 underline-offset-4">
+              Registreer
             </Link>
-          </p>
+            <p className="text-xs text-white/35">Depth is bij de lancering gratis te gebruiken.</p>
+          </div>
         </Card>
       </div>
     </main>
   );
 }
-
 

@@ -2,14 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
-body { @apply bg-zinc-50 text-zinc-900; margin: 0; }
-button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #a7f3d0; outline-offset: 3px; }
-.depth-enter { animation: depth-enter 420ms cubic-bezier(.22,1,.36,1) both; }
-.depth-rise { animation: depth-rise 520ms cubic-bezier(.22,1,.36,1) both; }
-@keyframes depth-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes depth-rise { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+:root {
+  --depth-bg: #1e1b27;
+  --depth-bg-deep: #111018;
+  --depth-surface: rgba(255, 255, 255, 0.055);
+  --depth-surface-strong: rgba(255, 255, 255, 0.085);
+  --depth-border: rgba(255, 255, 255, 0.10);
+  --depth-border-strong: rgba(255, 255, 255, 0.16);
+  --depth-text: rgba(255, 255, 255, 0.94);
+  --depth-muted: rgba(255, 255, 255, 0.62);
+  --depth-faint: rgba(255, 255, 255, 0.42);
+  --depth-green: #66b96c;
+  --depth-green-soft: rgba(102, 185, 108, 0.14);
+  --depth-danger: #ef7777;
+  --depth-radius-card: 1.15rem;
+  --depth-radius-control: 0.95rem;
 }
+
+html, body { min-height: 100%; }
+html { background: var(--depth-bg); scroll-behavior: smooth; }
+body { margin: 0; background: var(--depth-bg); color: #fff; text-rendering: optimizeLegibility; }
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+::selection { background: rgba(102, 185, 108, 0.35); color: #fff; }
+
+@layer components {
+  .depth-page { @apply mx-auto w-full max-w-6xl px-3 py-3 pb-[calc(6.75rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-8 sm:pb-8; }
+  .depth-card { border: 1px solid var(--depth-border); border-radius: var(--depth-radius-card); background: var(--depth-surface); box-shadow: 0 12px 36px rgba(0,0,0,.20); backdrop-filter: blur(12px); }
+  .depth-card-muted { border: 1px solid var(--depth-border); border-radius: var(--depth-radius-card); background: rgba(0,0,0,.16); }
+  .depth-eyebrow { color: rgba(255,255,255,.42); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+  .depth-title { color: #fff; font-size: 1.35rem; font-weight: 650; letter-spacing: -.02em; line-height: 1.15; }
+  .depth-subtitle { color: rgba(255,255,255,.62); font-size: .82rem; line-height: 1.35rem; }
+  .depth-input { border: 1px solid var(--depth-border); border-radius: var(--depth-radius-control); background: rgba(0,0,0,.22); color: rgba(255,255,255,.92); outline: none; }
+  .depth-input:focus { border-color: rgba(102,185,108,.42); box-shadow: 0 0 0 3px rgba(102,185,108,.10); }
+  .depth-skeleton { position: relative; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.08); }
+  .depth-skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.11), transparent); animation: depth-shimmer 1.35s infinite; }
+}
+
+@media (min-width: 640px) { .depth-title { font-size: 1.875rem; } }
+@keyframes depth-shimmer { 100% { transform: translateX(100%); } }
+@keyframes depth-soft-dock-glow { 0%,100% { box-shadow: 0 0 0 1px rgba(102,185,108,.18),0 10px 34px rgba(0,0,0,.68),0 0 20px rgba(102,185,108,.12); } 50% { box-shadow: 0 0 0 1px rgba(102,185,108,.34),0 12px 38px rgba(0,0,0,.78),0 0 30px rgba(102,185,108,.22); } }
+@keyframes depth-action-pulse { 0%,100% { box-shadow: 0 0 0 1px rgba(255,255,255,.08),0 0 16px rgba(102,185,108,.09); } 50% { box-shadow: 0 0 0 1px rgba(255,255,255,.16),0 0 24px rgba(102,185,108,.18); } }
+.depth-action-dock { animation: depth-soft-dock-glow 3.6s ease-in-out infinite; }
+.depth-action-button { animation: depth-action-pulse 4.4s ease-in-out infinite; }
+.depth-range { min-height: 34px; accent-color: var(--depth-green); }
+.depth-range::-webkit-slider-thumb, .depth-range::-moz-range-thumb { width: 28px; height: 28px; border-radius: 999px; border: 2px solid rgba(255,255,255,.84); background: var(--depth-green); box-shadow: 0 0 0 8px rgba(102,185,108,.12),0 0 20px rgba(102,185,108,.22); }
+@keyframes depth-message-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.depth-message-in { animation: depth-message-in 180ms ease-out both; }
+@keyframes depth-profile-transition-in { 0% { opacity: 0; transform: scale(.96); } 20%,78% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.03); } }
+@keyframes depth-profile-card-pop { 0% { opacity: 0; transform: translateY(12px) scale(.94); } 24% { opacity: 1; transform: translateY(0) scale(1.015); } 78% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-8px) scale(.98); } }
+.depth-profile-transition { position: fixed; inset: 0; z-index: 115; display: grid; place-items: center; pointer-events: none; background: radial-gradient(circle at center,rgba(30,27,39,.70),rgba(17,16,24,.16) 56%,transparent 78%); animation: depth-profile-transition-in 820ms cubic-bezier(.22,1,.36,1) both; }
+.depth-profile-transition-card { display: grid; min-width: 13rem; place-items: center; border-radius: 1.5rem; padding: 1.1rem 1.4rem 1rem; background: rgba(24,21,33,.88); box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset,0 24px 70px rgba(0,0,0,.58); backdrop-filter: blur(14px); animation: depth-profile-card-pop 820ms cubic-bezier(.22,1,.36,1) both; }
+.depth-profile-transition-like .depth-profile-transition-card { box-shadow: 0 0 0 1px rgba(102,185,108,.32) inset,0 0 44px rgba(102,185,108,.22),0 24px 70px rgba(0,0,0,.58); }
+.depth-profile-transition-pass .depth-profile-transition-card { box-shadow: 0 0 0 1px rgba(228,107,107,.32) inset,0 0 44px rgba(228,107,107,.18),0 24px 70px rgba(0,0,0,.58); }
+.depth-profile-transition-super .depth-profile-transition-card { box-shadow: 0 0 0 1px rgba(79,125,255,.36) inset,0 0 48px rgba(79,125,255,.24),0 24px 70px rgba(0,0,0,.58); }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
