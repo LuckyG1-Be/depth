@@ -1,87 +1,38 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import ProfilePhotoManager, { type ProfilePhoto } from "@/components/ProfilePhotoManager";
-import { VALUES, PASSIONS } from "@/lib/profileOptions";
-import LocationAutocomplete, { type LocationValue } from "@/components/LocationAutocomplete";
-import PauseProfileToggle from "@/components/PauseProfileToggle";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import type { LocationValue } from "@/components/LocationAutocomplete";
+import type { ProfilePhoto } from "@/components/ProfilePhotoManager";
+import AccountActionsSection from "@/components/profile/AccountActionsSection";
+import ProfileBasicsSection from "@/components/profile/ProfileBasicsSection";
+import ProfileDepthQuestionsSection from "@/components/profile/ProfileDepthQuestionsSection";
+import ProfileIntentSection from "@/components/profile/ProfileIntentSection";
+import ProfileLifestyleSection from "@/components/profile/ProfileLifestyleSection";
+import ProfilePhotosSection from "@/components/profile/ProfilePhotosSection";
+import ProfileStatusBar from "@/components/profile/ProfileStatusBar";
+import ProfileValuesPassionsSection from "@/components/profile/ProfileValuesPassionsSection";
+import { DEPTH_MIN_CHARS, MIN_PHOTOS, Q_KEYS, REQUIRED_PASSIONS, REQUIRED_VALUES } from "@/components/profile/constants";
+import { useDebouncedEffect } from "@/components/profile/hooks";
+import type { Initial, ProfileLocation } from "@/components/profile/types";
+import { depthOk, normalizePickList, normalizeProfile, postJson } from "@/components/profile/utils";
 
-type Initial = {
-  user: {
-    name: string;
-    city: string;
-    gender: string;
-    isPaused: boolean;
-    lat?: number | null;
-    lng?: number | null;
-    placeId?: string | null;
-  };
-  profile: {
-    intent: string;
-    religion: string;
-    values: string[];
-    passions: string[];
-    q1: string;
-    q2: string;
-    q3: string;
-    q4: string;
-    q5: string;
-  };
-  photos: ProfilePhoto[];
-};
 
-const INTENTS = ["Serieuze relatie", "Casual", "Vriendschap", "Nog aan het kijken"];
-const RELIGIONS = ["Geen", "Christelijk", "Islam", "Joods", "Hindoe", "Boeddhist", "Anders"];
-
-const GENDER_OPTIONS = ["Vrouw", "Man"];
-
-const REQUIRED_VALUES = 3;
-const REQUIRED_PASSIONS = 2;
-const MAX_PASSIONS = 8;
-
-const MIN_PHOTOS = 3;
-const DEPTH_MIN_CHARS = 25;
-const REQUIRED_DEPTH_ANSWERS = 3;
-
-function cls(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
+function readApiError(value: unknown, fallback: string) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const error = (value as Record<string, unknown>).error;
+    if (typeof error === "string" && error.trim()) return error;
+  }
+  return fallback;
 }
 
-async function postJson(url: string, body: any) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || data?.ok === false) throw new Error(data?.error || "Opslaan mislukt");
-  return data;
+function getErrorMessage(e: unknown, fallback: string) {
+  return e instanceof Error ? e.message : fallback;
 }
-
-function useDebouncedEffect(effect: () => void, deps: any[], delayMs: number) {
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    const t = setTimeout(() => effect(), delayMs);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
-
-function depthOk(profile: Initial["profile"]) {
-  return [profile.q1, profile.q2, profile.q3, profile.q4, profile.q5].filter((x) => x.trim().length >= DEPTH_MIN_CHARS).length >= REQUIRED_DEPTH_ANSWERS;
-}
-
 export default function ProfileMeForm({ initial }: { initial: Initial }) {
   const [user, setUser] = useState(initial.user);
-  const [profile, setProfile] = useState(initial.profile);
+  const [profile, setProfile] = useState(() => normalizeProfile(initial.profile));
   const [photos, setPhotos] = useState<ProfilePhoto[]>(initial.photos);
 
-  // locatie state (bron van waarheid voor city + coords)
   const [location, setLocation] = useState<LocationValue | null>(() => {
     const city = (initial.user.city || "").trim();
     const placeId = (initial.user.placeId || "").trim();
@@ -102,15 +53,51 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
   const lastUserSentRef = useRef<string>("");
   const lastProfileSentRef = useRef<string>("");
 
+  // dirty + latest refs for flush-on-unmount
+  const dirtyRef = useRef(false);
+  const latestProfileRef = useRef(profile);
+
+  const dirtyUserRef = useRef(false);
+  const latestUserRef = useRef(user);
+  const latestLocationRef = useRef<LocationValue | null>(location);
+
   const photoCount = photos.length;
 
-  const refBasics = useRef<HTMLDivElement | null>(null);
-  const refValues = useRef<HTMLDivElement | null>(null);
-  const refDepth = useRef<HTMLDivElement | null>(null);
-  const refPhotos = useRef<HTMLDivElement | null>(null);
+  const refBasics = useRef<HTMLElement>(null);
+  const refValues = useRef<HTMLElement>(null);
+  const refDepth = useRef<HTMLElement>(null);
+  const refPhotos = useRef<HTMLElement>(null);
 
-  function scrollTo(ref: React.RefObject<HTMLDivElement>) {
+  function scrollTo(ref: RefObject<HTMLElement>) {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+
+  async function exportAccountData() {
+    try {
+      setGlobalError(null);
+      const res = await fetch("/api/account/export", { method: "GET", cache: "no-store" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(readApiError(data, "Export mislukt"));
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const filename = match?.[1] || "depth-account-export.json";
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setGlobalError(e?.message || "Export mislukt");
+    }
   }
 
   async function refreshMe() {
@@ -132,35 +119,34 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
     }
   }
 
+  useEffect(() => {
+    latestProfileRef.current = profile;
+  }, [profile]);
+
+  useEffect(() => {
+    latestUserRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    latestLocationRef.current = location;
+  }, [location]);
+
   const errors = useMemo(() => {
     const e: Record<string, string> = {};
 
     if (!user.name.trim()) e.name = "Voornaam is verplicht.";
-
-    // ✅ Stad is verplicht EN moet gekozen zijn
-    if (!location) e.city = "Kies je stad uit de lijst (autocomplete).";
-
     if (!user.gender.trim()) e.gender = "Kies je gender.";
+
+    if (!location) e.city = "Kies je stad uit de lijst (autocomplete).";
 
     if (!profile.intent.trim()) e.intent = "Kies een intentie.";
     if (profile.values.length !== REQUIRED_VALUES) e.values = `Selecteer exact ${REQUIRED_VALUES} waarden.`;
-    if (profile.passions.length < REQUIRED_PASSIONS) e.passions = `Selecteer minstens ${REQUIRED_PASSIONS} passies.`;
+    if (profile.passions.length !== REQUIRED_PASSIONS) e.passions = `Selecteer exact ${REQUIRED_PASSIONS} passies.`;
 
-    const qs = [
-      ["q1", profile.q1],
-      ["q2", profile.q2],
-      ["q3", profile.q3],
-      ["q4", profile.q4],
-      ["q5", profile.q5],
-    ] as const;
-
-    for (const [index, [k, v]] of qs.entries()) {
-      const t = v.trim();
-      if (!t) {
-        if (index < REQUIRED_DEPTH_ANSWERS) e[k] = "Beantwoord minstens drie vragen.";
-      } else if (t.length < DEPTH_MIN_CHARS) {
-        e[k] = `Min. ${DEPTH_MIN_CHARS} tekens.`;
-      }
+    for (const k of Q_KEYS) {
+      const t = (profile[k] || "").trim();
+      if (!t) e[k] = "Verplicht.";
+      else if (t.length < DEPTH_MIN_CHARS) e[k] = `Min. ${DEPTH_MIN_CHARS} tekens.`;
     }
 
     if (photoCount < MIN_PHOTOS) e.photos = `Upload min. ${MIN_PHOTOS} foto’s.`;
@@ -172,7 +158,7 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
     const basicsOk = user.name.trim().length > 0 && user.gender.trim().length > 0 && !!location;
     const intentOk = profile.intent.trim().length > 0;
     const valuesOk = profile.values.length === REQUIRED_VALUES;
-    const passionsOk = profile.passions.length >= REQUIRED_PASSIONS;
+    const passionsOk = profile.passions.length === REQUIRED_PASSIONS;
     const photosOk = photoCount >= MIN_PHOTOS;
     const depthAllOk = depthOk(profile);
     return basicsOk && intentOk && valuesOk && passionsOk && photosOk && depthAllOk;
@@ -189,17 +175,14 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
     if (errors.values) items.push({ key: "values", title: "Waarden", hint: errors.values, go: () => scrollTo(refValues) });
     if (errors.passions) items.push({ key: "passions", title: "Passies", hint: errors.passions, go: () => scrollTo(refValues) });
 
-    const depthMissing = [errors.q1, errors.q2, errors.q3, errors.q4, errors.q5].some(Boolean);
-    if (depthMissing) items.push({ key: "depth", title: "Depth-vragen", hint: `Beantwoord minstens ${REQUIRED_DEPTH_ANSWERS} vragen.`, go: () => scrollTo(refDepth) });
+    const depthMissing = Q_KEYS.some((k) => !!errors[k]);
+    if (depthMissing) items.push({ key: "depth", title: "Depth-vragen", hint: "Vul alle vragen in.", go: () => scrollTo(refDepth) });
 
     return items;
   }, [errors]);
 
-  const completion = Math.max(0, Math.min(100, Math.round((1 - Object.keys(errors).length / 8) * 100)));
-
   async function saveUser(partial: Partial<Initial["user"]>) {
     setGlobalError(null);
-
     const payload = JSON.stringify(partial);
     if (payload === lastUserSentRef.current) return;
 
@@ -207,6 +190,7 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
     try {
       await postJson("/api/profile/update-user", { user: partial });
       lastUserSentRef.current = payload;
+      dirtyUserRef.current = false;
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 1200);
     } catch (e: any) {
@@ -215,16 +199,23 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
     }
   }
 
-  async function saveProfile(partial: Partial<Initial["profile"]>) {
+  async function saveProfileFull(next: Initial["profile"], opts?: { keepalive?: boolean }) {
     setGlobalError(null);
 
-    const payload = JSON.stringify(partial);
+    const normalized: Initial["profile"] = {
+      ...next,
+      values: normalizePickList(next.values || [], REQUIRED_VALUES),
+      passions: normalizePickList(next.passions || [], REQUIRED_PASSIONS),
+    };
+
+    const payload = JSON.stringify(normalized);
     if (payload === lastProfileSentRef.current) return;
 
     setSaveStatus("saving");
     try {
-      await postJson("/api/profile/update-profile", { profile: partial });
+      await postJson("/api/profile/update-profile", { profile: normalized }, { keepalive: opts?.keepalive });
       lastProfileSentRef.current = payload;
+      dirtyRef.current = false;
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 1200);
     } catch (e: any) {
@@ -233,63 +224,113 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
     }
   }
 
-  // Autosave: user fields
+  function applyProfile(updater: (prev: Initial["profile"]) => Initial["profile"]) {
+    setProfile((prev) => {
+      const next = updater(prev);
+      dirtyRef.current = true;
+      latestProfileRef.current = next;
+      void saveProfileFull(next);
+      return next;
+    });
+  }
+
+  function togglePick(list: string[], item: string, max: number) {
+    const base = normalizePickList(list, max);
+    const has = base.includes(item);
+    if (has) return base.filter((x) => x !== item);
+    if (base.length >= max) return base;
+    return normalizePickList([...base, item], max);
+  }
+
+  // Normalize + persist if initial contains duplicates/empties
+  useEffect(() => {
+    const normValues = normalizePickList(initial.profile.values || [], REQUIRED_VALUES);
+    const normPassions = normalizePickList(initial.profile.passions || [], REQUIRED_PASSIONS);
+
+    const rawValuesCleaned = (initial.profile.values || []).map((x) => String(x || "").trim()).filter(Boolean);
+    const rawPassionsCleaned = (initial.profile.passions || []).map((x) => String(x || "").trim()).filter(Boolean);
+
+    const needsPersist =
+      rawValuesCleaned.join("|") !== normValues.join("|") || rawPassionsCleaned.join("|") !== normPassions.join("|");
+
+    if (!needsPersist) return;
+
+    const next: Initial["profile"] = {
+      ...profile,
+      values: normValues,
+      passions: normPassions,
+    };
+
+    dirtyRef.current = true;
+    latestProfileRef.current = next;
+
+    void saveProfileFull(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Flush profile on unmount (keepalive)
+  useEffect(() => {
+    return () => {
+      if (!dirtyRef.current) return;
+      void postJson("/api/profile/update-profile", { profile: latestProfileRef.current }, { keepalive: true }).catch(() => {});
+    };
+  }, []);
+
+  // User autosave debounced
   useDebouncedEffect(
     () => {
-      if (!user.name.trim() || !user.gender.trim()) return;
-      if (!location) return;
+      const nameOk = user.name.trim().length > 0;
+      const genderOk = user.gender.trim().length > 0;
+
+      const hasValidLocation =
+        !!location && !!location.placeId && typeof location.lat === "number" && typeof location.lng === "number";
+      const isClearing = user.city === "" && !location;
+
+      if (!nameOk && !genderOk && !hasValidLocation && !isClearing) return;
+
+      dirtyUserRef.current = true;
 
       void saveUser({
         name: user.name,
         gender: user.gender,
-        city: location.label,
-        lat: location.lat,
-        lng: location.lng,
-        placeId: location.placeId,
+        city: hasValidLocation ? location!.label : isClearing ? "" : user.city,
+        lat: hasValidLocation ? location!.lat : null,
+        lng: hasValidLocation ? location!.lng : null,
+        placeId: hasValidLocation ? location!.placeId : null,
       });
     },
-    [user.name, user.gender, location?.placeId, location?.label, location?.lat, location?.lng],
-    850
+    [user.name, user.gender, user.city, location?.label, location?.placeId, location?.lat, location?.lng],
+    900
   );
 
-  // Autosave: profile fields
-  useDebouncedEffect(
-    () => {
-      // religie mag leeg zijn
-      if (!profile.intent.trim()) return;
+  // Flush user on unmount (keepalive)
+  useEffect(() => {
+    return () => {
+      if (!dirtyUserRef.current) return;
 
-      void saveProfile({
-        intent: profile.intent,
-        religion: profile.religion,
-        values: profile.values,
-        passions: profile.passions,
-        q1: profile.q1,
-        q2: profile.q2,
-        q3: profile.q3,
-        q4: profile.q4,
-        q5: profile.q5,
-      });
-    },
-    [
-      profile.intent,
-      profile.religion,
-      profile.values.join("|"),
-      profile.passions.join("|"),
-      profile.q1,
-      profile.q2,
-      profile.q3,
-      profile.q4,
-      profile.q5,
-    ],
-    1050
-  );
+      const u = latestUserRef.current;
+      const loc = latestLocationRef.current;
 
-  function togglePick(list: string[], item: string, max: number) {
-    const has = list.includes(item);
-    if (has) return list.filter((x) => x !== item);
-    if (list.length >= max) return list;
-    return [...list, item];
-  }
+      const nameOk = (u?.name || "").trim().length > 0;
+      const genderOk = (u?.gender || "").trim().length > 0;
+      const hasValidLocation =
+        !!loc && !!loc.placeId && typeof loc.lat === "number" && typeof loc.lng === "number" && (loc.label || "").trim().length > 0;
+      const isClearing = (u?.city || "") === "" && !loc;
+
+      if (!nameOk && !genderOk && !hasValidLocation && !isClearing) return;
+
+      const payload = {
+        name: u.name,
+        gender: u.gender,
+        city: hasValidLocation ? loc!.label : isClearing ? "" : u.city,
+        lat: hasValidLocation ? loc!.lat : null,
+        lng: hasValidLocation ? loc!.lng : null,
+        placeId: hasValidLocation ? loc!.placeId : null,
+      };
+
+      void postJson("/api/profile/update-user", { user: payload }, { keepalive: true }).catch(() => {});
+    };
+  }, []);
 
   async function deleteAccount() {
     setDeleting(true);
@@ -298,354 +339,78 @@ export default function ProfileMeForm({ initial }: { initial: Initial }) {
       const res = await fetch("/api/account/delete", { method: "POST" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || "Verwijderen mislukt");
+        throw new Error(readApiError(data, "Verwijderen mislukt"));
       }
       window.location.href = "/login";
-    } catch (e: any) {
-      setGlobalError(e?.message || "Verwijderen mislukt");
+    } catch (e: unknown) {
+      setGlobalError(getErrorMessage(e, "Verwijderen mislukt"));
     } finally {
       setDeleting(false);
       setConfirmDeleteOpen(false);
     }
   }
 
+
+  function onNameChange(value: string) {
+    dirtyUserRef.current = true;
+    setUser((s) => ({ ...s, name: value }));
+  }
+
+  function onGenderChange(value: string) {
+    dirtyUserRef.current = true;
+    setUser((s) => ({ ...s, gender: value }));
+  }
+
+  function onLocationChange(value: ProfileLocation) {
+    dirtyUserRef.current = true;
+    setLocation(value);
+    setUser((s) => ({ ...s, city: value?.label || "" }));
+  }
+
   return (
-    <div className="space-y-8">
-      {globalError && <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm">{globalError}</div>}
+    <div className="space-y-3.5 overflow-x-hidden sm:space-y-6">
+      {isComplete ? (
+        globalError ? <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-50">{globalError}</div> : null
+      ) : (
+        <ProfileStatusBar globalError={globalError} saveStatus={saveStatus} checklist={checklist} />
+      )}
 
-      {/* Subtiele autosave status + CTA */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-xs opacity-70">
-          {saveStatus === "saving" ? "Automatisch opslaan…" : saveStatus === "saved" ? "Automatisch opgeslagen ✓" : "Alles wordt automatisch opgeslagen."}
-        </div>
+      <ProfileBasicsSection
+        sectionRef={refBasics}
+        user={user}
+        location={location}
+        errors={errors}
+        onNameChange={onNameChange}
+        onGenderChange={onGenderChange}
+        onLocationChange={onLocationChange}
+      />
 
-        <Link
-          href="/discover"
-          className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-        >
-          Naar Discover
-        </Link>
-        <Link
-          href="/profile/preview"
-          className="inline-flex items-center justify-center rounded-2xl border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/15"
-        >
-          Bekijk profielpreview
-        </Link>
+      <ProfileIntentSection profile={profile} errors={errors} applyProfile={applyProfile} />
+      <ProfileLifestyleSection profile={profile} applyProfile={applyProfile} />
+
+      <ProfileValuesPassionsSection
+        sectionRef={refValues}
+        profile={profile}
+        errors={errors}
+        applyProfile={applyProfile}
+        togglePick={togglePick}
+      />
+
+      <ProfileDepthQuestionsSection sectionRef={refDepth} profile={profile} errors={errors} applyProfile={applyProfile} />
+
+      <ProfilePhotosSection sectionRef={refPhotos} photos={photos} errors={errors} refreshMe={refreshMe} />
+
+      <AccountActionsSection
+        confirmDeleteOpen={confirmDeleteOpen}
+        deleting={deleting}
+        exportAccountData={exportAccountData}
+        deleteAccount={deleteAccount}
+        setConfirmDeleteOpen={setConfirmDeleteOpen}
+      />
+
+      <div className="hidden">
+        <div>{String(isComplete)}</div>
       </div>
-
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-3"><div><div className="text-sm font-semibold">Profielsterkte</div><div className="mt-1 text-xs opacity-65">Een sterk profiel maakt een eerste bericht makkelijker.</div></div><div className="text-lg font-semibold text-emerald-200">{completion}%</div></div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-300 transition-[width]" style={{ width: `${completion}%` }} /></div>
-      </div>
-
-      <nav className="sticky top-2 z-20 -mx-1 flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-[#1e1b27]/90 p-2 backdrop-blur md:hidden" aria-label="Profielsecties">
-        {[{ label: "Basis", ref: refBasics }, { label: "Waarden", ref: refValues }, { label: "Vragen", ref: refDepth }, { label: "Foto’s", ref: refPhotos }].map(({ label, ref }) => <button key={label} type="button" onClick={() => scrollTo(ref)} className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold">{label}</button>)}
-      </nav>
-
-      {/* Checklist alleen als het niet compleet is */}
-      {!isComplete ? (
-        <section className="rounded-3xl border border-amber-300/20 bg-amber-400/10 p-6">
-          <div className="flex flex-col gap-1">
-            <div className="text-lg font-semibold text-amber-50">Maak je profiel herkenbaar</div>
-            <div className="text-sm text-amber-50/90">Je kunt al Discover bekijken. Deze stappen helpen anderen om sneller op jou te reageren.</div>
-          </div>
-
-          <div className="mt-4 grid gap-2">
-            {checklist.map((it) => (
-              <button
-                key={it.key}
-                type="button"
-                onClick={it.go}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left text-sm text-white/90 hover:bg-white/10"
-              >
-                <div>
-                  <div className="font-semibold">{it.title}</div>
-                  <div className="text-xs opacity-75">{it.hint}</div>
-                </div>
-                <div className="text-xs opacity-70">Ga naar</div>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {/* Basis */}
-      <section ref={refBasics} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
-        <h2 className="text-lg font-semibold">Mijn profiel</h2>
-        <p className="mt-1 text-sm opacity-70">Naam, gender en stad (nodig voor afstand).</p>
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm">
-            <span className="opacity-80">Voornaam</span>
-            <input
-              value={user.name}
-              onChange={(e) => setUser((s) => ({ ...s, name: e.target.value }))}
-              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-emerald-300/30"
-              placeholder="Voornaam"
-            />
-            {errors.name && <div className="text-xs text-red-300">{errors.name}</div>}
-          </label>
-
-          <label className="grid gap-2 text-sm">
-            <span className="opacity-80">Gender</span>
-            <select
-              value={user.gender}
-              onChange={(e) => setUser((s) => ({ ...s, gender: e.target.value }))}
-              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-emerald-300/30"
-            >
-              <option value="">Kies…</option>
-              {GENDER_OPTIONS.map((x) => (
-                <option key={x} value={x}>
-                  {x}
-                </option>
-              ))}
-            </select>
-            {errors.gender && <div className="text-xs text-red-300">{errors.gender}</div>}
-          </label>
-
-          <label className="grid gap-2 text-sm sm:col-span-2">
-            <span className="opacity-80">Stad</span>
-            <LocationAutocomplete
-              value={location}
-              onChange={(v) => {
-                setLocation(v);
-                setUser((s) => ({ ...s, city: v?.label ?? "" }));
-              }}
-              placeholder="Typ en kies…"
-            />
-            {errors.city && <div className="text-xs text-red-300">{errors.city}</div>}
-            <div className="text-[11px] opacity-60">Tip: kies je stad altijd uit de lijst — dan werkt afstand in Discover.</div>
-          </label>
-
-          <label className="grid gap-2 text-sm sm:col-span-2">
-            <span className="opacity-80">Intentie</span>
-            <select
-              value={profile.intent}
-              onChange={(e) => setProfile((s) => ({ ...s, intent: e.target.value }))}
-              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-emerald-300/30"
-            >
-              <option value="">Kies…</option>
-              {INTENTS.map((x) => (
-                <option key={x} value={x}>
-                  {x}
-                </option>
-              ))}
-            </select>
-            {errors.intent && <div className="text-xs text-red-300">{errors.intent}</div>}
-          </label>
-
-          <label className="grid gap-2 text-sm sm:col-span-2">
-            <span className="opacity-80">Religie</span>
-            <select
-              value={profile.religion}
-              onChange={(e) => setProfile((s) => ({ ...s, religion: e.target.value }))}
-              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-emerald-300/30"
-            >
-              <option value="">Kies…</option>
-              {RELIGIONS.map((x) => (
-                <option key={x} value={x}>
-                  {x}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="mt-3 text-xs opacity-70">
-          Je Discover filters wijzig je via{" "}
-          <Link className="underline decoration-emerald-300/40" href="/profile/preferences">
-            Datingvoorkeuren
-          </Link>
-          .
-        </div>
-      </section>
-
-      {/* Waarden & passies */}
-      <section ref={refValues} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
-        <h2 className="text-lg font-semibold">Waarden & passies</h2>
-          <div className="mt-2 text-sm opacity-75">
-          Kies <b>{REQUIRED_VALUES}</b> waarden en minstens <b>{REQUIRED_PASSIONS}</b> passies die bij je passen.
-        </div>
-
-        <div className="mt-5 grid gap-6">
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Waarden</div>
-              <div className={cls("text-xs", errors.values ? "text-red-300" : "opacity-70")}>
-                {profile.values.length}/{REQUIRED_VALUES}
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {VALUES.map((v) => {
-                const on = profile.values.includes(v);
-                const disabled = !on && profile.values.length >= REQUIRED_VALUES;
-
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => setProfile((s) => ({ ...s, values: togglePick(s.values, v, REQUIRED_VALUES) }))}
-                    className={cls(
-                      "rounded-full border px-3 py-1.5 text-sm transition",
-                      on
-                        ? "border-emerald-300/35 bg-emerald-400/10 text-emerald-50"
-                        : disabled
-                        ? "cursor-not-allowed border-white/5 bg-white/5 text-white/35"
-                        : "border-white/10 bg-black/10 text-white/85 hover:bg-white/10"
-                    )}
-                  >
-                    {v}
-                  </button>
-                );
-              })}
-            </div>
-
-            {errors.values && <div className="mt-2 text-xs text-red-300">{errors.values}</div>}
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Passies</div>
-              <div className={cls("text-xs", errors.passions ? "text-red-300" : "opacity-70")}>
-                {profile.passions.length}/{MAX_PASSIONS}
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {PASSIONS.map((p) => {
-                const on = profile.passions.includes(p);
-                const disabled = !on && profile.passions.length >= MAX_PASSIONS;
-
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => setProfile((s) => ({ ...s, passions: togglePick(s.passions, p, MAX_PASSIONS) }))}
-                    className={cls(
-                      "rounded-full border px-3 py-1.5 text-sm transition",
-                      on
-                        ? "border-emerald-300/35 bg-emerald-400/10 text-emerald-50"
-                        : disabled
-                        ? "cursor-not-allowed border-white/5 bg-white/5 text-white/35"
-                        : "border-white/10 bg-black/10 text-white/85 hover:bg-white/10"
-                    )}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
-
-            {errors.passions && <div className="mt-2 text-xs text-red-300">{errors.passions}</div>}
-          </div>
-        </div>
-      </section>
-
-      {/* Depth */}
-      <section ref={refDepth} className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
-        <div>
-          <h2 className="text-lg font-semibold">Depth-vragen</h2>
-          <p className="mt-1 text-sm opacity-75">Beantwoord minstens {REQUIRED_DEPTH_ANSWERS} vragen, telkens met minimaal {DEPTH_MIN_CHARS} tekens. De rest is optioneel.</p>
-        </div>
-
-        <div className="mt-5 grid gap-4">
-          {([
-            ["Wat is voor jou een perfecte zaterdag?", "q1"],
-            ["Wat waardeer jij het meest in een relatie?", "q2"],
-            ["Waar kijk je het meest naar uit dit jaar?", "q3"],
-            ["Wat is een kleine gewoonte die je leven beter maakt?", "q4"],
-            ["Wat wil je dat iemand over jou begrijpt vanaf het begin?", "q5"],
-          ] as const).map(([label, key]) => (
-            <label key={key} className="grid gap-2 text-sm">
-              <span className="opacity-80">{label}</span>
-              <textarea
-                value={profile[key]}
-                onChange={(e) => setProfile((s) => ({ ...s, [key]: e.target.value }))}
-                className="min-h-[110px] rounded-2xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-emerald-300/30"
-                placeholder="Schrijf iets dat écht iets zegt over jou…"
-              />
-              <div className="flex items-center justify-between text-xs">
-                <span className={errors[key] ? "text-red-300" : "opacity-70"}>{errors[key] ? errors[key] : "✓"}</span>
-                <span className="opacity-60">{profile[key].trim().length}</span>
-              </div>
-            </label>
-          ))}
-        </div>
-      </section>
-
-      {/* Photos */}
-      <div ref={refPhotos}>
-        <ProfilePhotoManager photos={photos} onRefresh={refreshMe} />
-      </div>
-
-      {/* Account + GDPR */}
-      <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="text-lg font-semibold">Account</div>
-            <div className="mt-1 text-sm opacity-70">Beheer je gegevens. Download je data, log uit of verwijder je account.</div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <a
-              href="/api/account/export"
-              className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-            >
-              Gegevens downloaden
-            </a>
-
-            <Link
-              href="/logout"
-              className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-            >
-              Uitloggen
-            </Link>
-
-            <button
-              type="button"
-              onClick={() => setConfirmDeleteOpen(true)}
-              className="inline-flex items-center justify-center rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/15"
-            >
-              Account verwijderen
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 text-xs opacity-70">
-          Door je account te gebruiken ga je akkoord met de verwerking van noodzakelijke data voor matching & veiligheid. Bekijk ook onze <Link href="/privacy" className="underline">privacy-informatie</Link> en <Link href="/safety" className="underline">veiligheidsrichtlijnen</Link>.
-        </div>
-
-        <PauseProfileToggle initialPaused={user.isPaused} />
-
-        {confirmDeleteOpen ? (
-          <div className="mt-5 rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-            <div className="text-sm font-semibold">Account definitief verwijderen?</div>
-            <div className="mt-1 text-sm opacity-80">Dit verwijdert je profiel, foto’s, likes en matches. Deze actie kan niet ongedaan worden gemaakt.</div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteOpen(false)}
-                disabled={deleting}
-                className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold hover:bg-white/10 disabled:opacity-60"
-              >
-                Annuleren
-              </button>
-              <button
-                type="button"
-                onClick={() => void deleteAccount()}
-                disabled={deleting}
-                className="rounded-2xl border border-red-500/25 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-50 hover:bg-red-500/20 disabled:opacity-60"
-              >
-                {deleting ? "Verwijderen…" : "Ja, verwijder mijn account"}
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </section>
     </div>
   );
 }

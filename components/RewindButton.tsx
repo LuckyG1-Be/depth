@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 export function RewindButton({ enabled }: { enabled: boolean }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -17,7 +21,7 @@ export function RewindButton({ enabled }: { enabled: boolean }) {
     try {
       const y = window.scrollY;
       const res = await fetch("/api/discover/rewind", { method: "POST" });
-      const data = await res.json().catch(() => ({} as any));
+      const data = readRecord(await res.json().catch(() => ({})));
 
       if (!res.ok) {
         if (data?.error === "PREMIUM_ONLY") setMsg("Rewind is Premium.");

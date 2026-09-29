@@ -195,6 +195,10 @@ export default async function ProfileMePage() {
           profile: {
             intent: me.profile!.intent ?? "",
             religion: me.profile!.religion ?? "",
+            education: "",
+            drinking: "",
+            smoking: "",
+            exercise: "",
             values: safeJsonArray(me.profile!.values),
             passions: safeJsonArray(me.profile!.passions),
             q1: me.profile!.q1 ?? "",

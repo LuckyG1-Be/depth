@@ -130,6 +130,7 @@ export default async function ChatMatchPage({ params }: { params: Promise<{ matc
         id: other.id,
         name: other.name || "Onbekend",
         city: other.city || "",
+        lastSeenAt: null,
         intent: other.profile?.intent || null,
         religion: other.profile?.religion || null,
         values: otherValues,

@@ -4,12 +4,26 @@ import { useMemo, useRef, useState } from "react";
 
 export type ProfilePhoto = {
   id: string;
-  slot: number;
+  slot: number; // 0..8
   url: string;
 };
 
-const MAX_SLOTS = 6; // 0..5
-const MIN_REQUIRED = 3;
+const MAX_SLOTS = 9;
+const MIN_REQUIRED = 4;
+const MAX_FILE_SIZE_MB = 8;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+function cls(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function friendlyUploadError(message: string) {
+  const lower = message.toLowerCase();
+  if (lower.includes("size") || lower.includes("groot") || lower.includes("large")) return `Bestand te groot. Gebruik een foto onder ${MAX_FILE_SIZE_MB} MB.`;
+  if (lower.includes("type") || lower.includes("mime") || lower.includes("jpeg") || lower.includes("png") || lower.includes("webp")) return "Gebruik een JPG, PNG of WEBP foto.";
+  if (lower.includes("blob") || lower.includes("storage") || lower.includes("upload")) return "Opslagfout. Probeer opnieuw of meld dit via feedback.";
+  return message || "Upload mislukt. Probeer opnieuw.";
+}
 
 async function postJson(url: string, body: any) {
   const res = await fetch(url, {
@@ -22,18 +36,16 @@ async function postJson(url: string, body: any) {
   return data;
 }
 
-async function postForm(url: string, fd: FormData) {
+async function postForm(url: string, fd: FormData, onProgress?: (label: string) => void) {
+  onProgress?.("Uploaden…");
   const res = await fetch(url, { method: "POST", body: fd });
+  onProgress?.("Verwerken…");
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data?.ok === false) throw new Error(data?.error || "Upload mislukt");
   return data;
 }
 
-function cls(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
-}
-
-function Icon({ name }: { name: "plus" | "trash" | "crown" | "left" | "right" | "loader" }) {
+function Icon({ name }: { name: "plus" | "delete" | "crown" | "left" | "right" | "loader" }) {
   if (name === "loader")
     return (
       <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin">
@@ -43,7 +55,7 @@ function Icon({ name }: { name: "plus" | "trash" | "crown" | "left" | "right" | 
 
   const paths: Record<string, string> = {
     plus: "M12 5v14M5 12h14",
-    trash: "M6 7h12M9 7V5h6v2m-7 3v9m8-9v9M8 21h8a2 2 0 0 0 2-2V7H6v12a2 2 0 0 0 2 2Z",
+    delete: "M18 6L6 18M6 6l12 12",
     crown: "M5 16l2-8 5 4 5-4 2 8H5Zm1 4h12",
     left: "M14 6l-6 6 6 6",
     right: "M10 6l6 6-6 6",
@@ -65,6 +77,7 @@ export default function ProfilePhotoManager({
 }) {
   const [busySlot, setBusySlot] = useState<number | null>(null);
   const [busyGlobal, setBusyGlobal] = useState(false);
+  const [progressLabel, setProgressLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -76,9 +89,13 @@ export default function ProfilePhotoManager({
     return m;
   }, [photos]);
 
+  const filledCount = photos.length;
+  const ready = filledCount >= MIN_REQUIRED;
+  const nextEmptySlot = Array.from({ length: MAX_SLOTS }).findIndex((_, slot) => !bySlot.get(slot));
+
   function showToast(msg: string) {
     setToast(msg);
-    setTimeout(() => setToast(null), 1400);
+    window.setTimeout(() => setToast(null), 1500);
   }
 
   function openPicker(slot: number) {
@@ -86,31 +103,39 @@ export default function ProfilePhotoManager({
   }
 
   async function upload(slot: number, file: File) {
+    if (bySlot.get(slot)) {
+      setError("Dit slot is al gevuld. Verwijder eerst de foto om een nieuwe toe te voegen.");
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`Bestand te groot. Gebruik een foto onder ${MAX_FILE_SIZE_MB} MB.`);
+      return;
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError("Gebruik een JPG, PNG of WEBP foto.");
+      return;
+    }
+
     setError(null);
-
-    const allowed = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowed.includes(file.type)) {
-      setError("Gebruik JPG, PNG of WebP.");
-      return;
-    }
-    const maxBytes = 8 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      setError("Bestand te groot (max 8MB).");
-      return;
-    }
-
+    setProgressLabel("Upload voorbereiden…");
     setBusySlot(slot);
+
     try {
       const fd = new FormData();
       fd.set("slot", String(slot));
       fd.set("photo", file);
-      await postForm("/api/profile/photos/set", fd);
+
+      await postForm("/api/profile/photos/set", fd, setProgressLabel);
+      setProgressLabel("Foto ophalen…");
       await onRefresh();
-      showToast(slot === 0 ? "Hoofdfoto bijgewerkt" : "Foto toegevoegd");
+      showToast("Foto toegevoegd");
     } catch (e: any) {
-      setError(e?.message || "Upload mislukt");
+      setError(friendlyUploadError(e?.message || "Upload mislukt"));
     } finally {
       setBusySlot(null);
+      setProgressLabel(null);
       if (inputRefs.current[slot]) inputRefs.current[slot]!.value = "";
     }
   }
@@ -118,6 +143,7 @@ export default function ProfilePhotoManager({
   async function remove(photoId: string) {
     setError(null);
     setBusyGlobal(true);
+
     try {
       await postJson("/api/profile/photos/delete", { photoId });
       await onRefresh();
@@ -131,8 +157,11 @@ export default function ProfilePhotoManager({
 
   async function move(from: number, to: number) {
     if (from === to) return;
+    if (to < 0 || to >= MAX_SLOTS) return;
+
     setError(null);
     setBusyGlobal(true);
+
     try {
       await postJson("/api/profile/photos/move", { from, to });
       await onRefresh();
@@ -144,36 +173,45 @@ export default function ProfilePhotoManager({
     }
   }
 
-  const filledCount = photos.length;
-
   return (
-    <section className="relative rounded-3xl border border-white/10 bg-white/5 p-6">
+    <section className="relative rounded-3xl border border-white/10 bg-black/15 p-3 sm:p-5">
       {toast && (
-        <div className="pointer-events-none absolute right-5 top-5 rounded-2xl border border-white/10 bg-black/60 px-4 py-2 text-xs text-white/90 backdrop-blur">
+        <div className="pointer-events-none absolute right-4 top-4 z-10 rounded-2xl border border-white/10 bg-black/70 px-4 py-2 text-xs text-white/90 backdrop-blur">
           {toast}
         </div>
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Foto’s</h2>
-          <p className="mt-1 text-sm opacity-80">
-            Min. <b>{MIN_REQUIRED}</b> nodig • Max <b>{MAX_SLOTS}</b>
-          </p>
+          <div className="text-sm font-semibold text-white">Foto-overzicht</div>
+          <p className="mt-1 text-xs text-white/55">Vervangen kan niet: verwijder eerst een foto.</p>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold">
-          {filledCount}/{MAX_SLOTS}
+        <div className={cls("rounded-xl border px-3 py-2 text-sm font-semibold", ready ? "border-emerald-300/20 bg-emerald-400/10 text-emerald-50" : "border-white/10 bg-black/20 text-white/75")}>
+          {filledCount}/{MAX_SLOTS} · {ready ? "voldoende" : `nog ${MIN_REQUIRED - filledCount}`}
         </div>
       </div>
 
-      {error && (
-        <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm">
-          {error}
-        </div>
-      )}
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/30">
+        <div className="h-full rounded-full bg-emerald-300 transition-all" style={{ width: `${Math.min(100, (filledCount / MIN_REQUIRED) * 100)}%` }} />
+      </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-3">
+      {progressLabel ? <div className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3 text-xs text-emerald-50">{progressLabel}</div> : null}
+      {error ? <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">{error}</div> : null}
+
+      {nextEmptySlot >= 0 ? (
+        <button
+          type="button"
+          onClick={() => openPicker(nextEmptySlot)}
+          disabled={busyGlobal || busySlot !== null}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-300/25 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/15 disabled:opacity-60 sm:hidden"
+        >
+          <Icon name={busySlot !== null ? "loader" : "plus"} />
+          Foto toevoegen
+        </button>
+      ) : null}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {Array.from({ length: MAX_SLOTS }).map((_, slot) => {
           const p = bySlot.get(slot) || null;
           const busy = busyGlobal || busySlot === slot;
@@ -183,85 +221,81 @@ export default function ProfilePhotoManager({
             <div
               key={slot}
               className={cls(
-                "group relative overflow-hidden rounded-2xl border border-white/10 bg-black/20",
-                isMain && p && "ring-1 ring-emerald-300/30"
+                "group relative overflow-hidden rounded-2xl border bg-black/20",
+                isMain ? "border-emerald-300/25" : "border-white/10",
+                !p && "cursor-pointer hover:border-white/20"
               )}
+              onClick={() => {
+                if (busy) return;
+                if (!p) openPicker(slot);
+              }}
+              role={!p ? "button" : undefined}
+              tabIndex={!p ? 0 : -1}
+              title={!p ? "Klik om toe te voegen" : "Foto (vervangen uitgeschakeld)"}
             >
-              <input
-                ref={(el) => {
-                  inputRefs.current[slot] = el;
-                }}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                disabled={busy}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) upload(slot, f);
-                }}
-              />
+              {!p && (
+                <input
+                  ref={(el) => {
+                    inputRefs.current[slot] = el;
+                  }}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void upload(slot, f);
+                  }}
+                />
+              )}
 
-              <div
-                className={cls(
-                  "aspect-square w-full",
-                  isMain && p ? "shadow-[0_0_0_1px_rgba(16,185,129,0.20),0_0_32px_rgba(16,185,129,0.14)]" : ""
-                )}
-              >
+              <div className="aspect-[3/4] w-full">
                 {p ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.url} alt={`photo-${slot}`} className="h-full w-full object-cover" />
+                  <img src={p.url} alt={`photo-${slot}`} className="pointer-events-none h-full w-full select-none object-cover" draggable={false} />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs text-white/55">
-                    <button
-                      type="button"
-                      onClick={() => openPicker(slot)}
-                      disabled={busy}
-                      className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4 text-white/90 hover:bg-white/10 disabled:opacity-60"
-                      aria-label="Voeg foto toe"
-                      title="Voeg foto toe"
-                    >
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-white/60">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                       {busySlot === slot ? <Icon name="loader" /> : <Icon name="plus" />}
-                    </button>
+                    </div>
+                    <div className="text-xs">Toevoegen</div>
                   </div>
                 )}
               </div>
 
-              <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-white/10 bg-black/55 px-2 py-1 text-[10px] text-white/80 backdrop-blur">
-                {isMain ? "Hoofdfoto" : `#${slot + 1}`}
+              <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-[10px] font-semibold text-white/85 backdrop-blur">
+                {isMain ? "Hoofdfoto" : `Foto ${slot + 1}`}
               </div>
 
               {p ? (
-                <div className="absolute inset-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
-                  <div className="flex gap-2">
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/85 to-transparent p-2 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100">
+                  <div className="flex gap-1.5">
                     <button
                       type="button"
-                      onClick={() => openPicker(slot)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void remove(p.id);
+                      }}
                       disabled={busy}
-                      className="rounded-xl border border-white/10 bg-black/45 p-2 text-white/90 hover:bg-black/60 disabled:opacity-60"
-                      aria-label="Vervang"
-                      title="Vervang"
-                    >
-                      <Icon name="plus" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => remove(p.id)}
-                      disabled={busy}
-                      className="rounded-xl border border-white/10 bg-black/45 p-2 text-white/90 hover:bg-black/60 disabled:opacity-60"
+                      className="rounded-xl border border-white/10 bg-black/55 p-2 text-white/90 hover:bg-black/70 disabled:opacity-60"
                       aria-label="Verwijder"
                       title="Verwijder"
                     >
-                      <Icon name="trash" />
+                      <Icon name="delete" />
                     </button>
 
                     {!isMain && (
                       <button
                         type="button"
-                        onClick={() => move(slot, 0)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void move(slot, 0);
+                        }}
                         disabled={busy}
                         className="rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-2 text-emerald-100 hover:bg-emerald-400/15 disabled:opacity-60"
-                        aria-label="Hoofdfoto"
+                        aria-label="Zet als hoofdfoto"
                         title="Zet als hoofdfoto"
                       >
                         <Icon name="crown" />
@@ -269,24 +303,33 @@ export default function ProfilePhotoManager({
                     )}
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <button
                       type="button"
-                      onClick={() => move(slot, slot - 1)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void move(slot, slot - 1);
+                      }}
                       disabled={busy || slot === 0}
-                      className="rounded-xl border border-white/10 bg-black/45 p-2 text-white/90 hover:bg-black/60 disabled:opacity-60"
-                      aria-label="Links"
-                      title="Links"
+                      className="rounded-xl border border-white/10 bg-black/55 p-2 text-white/90 hover:bg-black/70 disabled:opacity-40"
+                      aria-label="Naar links"
+                      title="Naar links"
                     >
                       <Icon name="left" />
                     </button>
+
                     <button
                       type="button"
-                      onClick={() => move(slot, slot + 1)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void move(slot, slot + 1);
+                      }}
                       disabled={busy || slot === MAX_SLOTS - 1}
-                      className="rounded-xl border border-white/10 bg-black/45 p-2 text-white/90 hover:bg-black/60 disabled:opacity-60"
-                      aria-label="Rechts"
-                      title="Rechts"
+                      className="rounded-xl border border-white/10 bg-black/55 p-2 text-white/90 hover:bg-black/70 disabled:opacity-40"
+                      aria-label="Naar rechts"
+                      title="Naar rechts"
                     >
                       <Icon name="right" />
                     </button>

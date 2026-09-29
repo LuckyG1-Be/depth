@@ -37,7 +37,7 @@ const LOOKING_FOR_OPTIONS = ["Vrouw", "Man", "Iedereen"];
 const REQUIRED_VALUES = 3;
 const REQUIRED_PASSIONS = 4;
 
-const MIN_PHOTOS = 3;
+const MIN_PHOTOS = 4;
 const DEPTH_MIN_CHARS = 25;
 
 const PROFILE_QUESTIONS: Array<{ key: "q1" | "q2" | "q3" | "q4" | "q5"; label: string }> = [

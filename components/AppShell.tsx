@@ -3,20 +3,32 @@
 import { usePathname } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import { ToastProvider } from "@/components/ToastProvider";
+import BootOverlays from "@/components/BootOverlays";
+import { PremiumProvider } from "@/components/premium/PremiumProvider";
+import { MobileBottomNav } from "@/components/header/MobileBottomNav";
 
-const HIDE_NAV_PREFIXES = ["/login", "/register", "/verify"];
+const HIDE_CHROME_PREFIXES = ["/login", "/register", "/verify", "/admin"];
+
+function isChatDetail(pathname: string) {
+  return /^\/chat\/[^/]+/.test(pathname);
+}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/";
-  const hide = HIDE_NAV_PREFIXES.some((p) => pathname.startsWith(p));
-  const hideChrome = hide || pathname === "/";
+  const isInstallGate = pathname === "/";
+  const hideChrome = HIDE_CHROME_PREFIXES.some((p) => pathname.startsWith(p));
+  const hideGlobalChrome = isInstallGate || hideChrome || isChatDetail(pathname);
 
   return (
     <ToastProvider>
-      <div className={`min-h-screen bg-[#1e1b27] text-white ${hideChrome ? "" : "pb-20 md:pb-0"}`}>
-        {!hideChrome ? <AppHeader /> : null}
-        {children}
-      </div>
+      <PremiumProvider>
+        <div className="min-h-screen bg-[#1e1b27] text-white">
+          <BootOverlays />
+          {!hideGlobalChrome ? <AppHeader /> : null}
+          {children}
+          {!hideGlobalChrome ? <MobileBottomNav /> : null}
+        </div>
+      </PremiumProvider>
     </ToastProvider>
   );
 }

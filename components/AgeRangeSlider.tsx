@@ -1,102 +1,114 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef } from "react";
 
-type Props = {
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+export function AgeRangeSlider({
+  min,
+  max,
+  valueMin,
+  valueMax,
+  onChangeMin,
+  onChangeMax,
+}: {
   min: number;
   max: number;
   valueMin: number;
   valueMax: number;
-  onChange: (min: number, max: number) => void;
-  className?: string;
-};
+  onChangeMin: (v: number) => void;
+  onChangeMax: (v: number) => void;
+}) {
+  const range = max - min;
 
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n));
-}
+  const leftPct = useMemo(() => ((valueMin - min) / range) * 100, [valueMin, min, range]);
+  const rightPct = useMemo(() => 100 - ((valueMax - min) / range) * 100, [valueMax, min, range]);
 
-export function AgeRangeSlider({ min, max, valueMin, valueMax, onChange, className }: Props) {
-  const [minVal, setMinVal] = useState(() => clamp(valueMin, min, max));
-  const [maxVal, setMaxVal] = useState(() => clamp(valueMax, min, max));
+  const minRef = useRef<HTMLInputElement | null>(null);
+  const maxRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => setMinVal(clamp(valueMin, min, max)), [valueMin, min, max]);
-  useEffect(() => setMaxVal(clamp(valueMax, min, max)), [valueMax, min, max]);
-
-  useEffect(() => {
-    const a = clamp(Math.min(minVal, maxVal - 1), min, max);
-    const b = clamp(Math.max(maxVal, a + 1), min, max);
-    if (a !== minVal) setMinVal(a);
-    if (b !== maxVal) setMaxVal(b);
-    onChange(a, b);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minVal, maxVal]);
-
-  const leftPct = useMemo(() => ((minVal - min) / (max - min)) * 100, [minVal, min, max]);
-  const rightPct = useMemo(() => 100 - ((maxVal - min) / (max - min)) * 100, [maxVal, min, max]);
+  function setMin(v: number) {
+    const nv = clamp(v, min, valueMax);
+    onChangeMin(nv);
+  }
+  function setMax(v: number) {
+    const nv = clamp(v, valueMin, max);
+    onChangeMax(nv);
+  }
 
   return (
-    <div className={className ?? ""}>
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-300">Leeftijdsrange</p>
-        <p className="text-sm font-semibold text-emerald-300">
-          {minVal} – {maxVal}
+    <div className="w-full">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold" style={{ color: "#66b96c" }}>
+          Leeftijd
         </p>
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-semibold text-white/85">
+          {valueMin} – {valueMax >= 65 ? "65+" : valueMax}
+        </div>
       </div>
 
-      <div className="mt-3">
-        <div className="relative h-2 rounded-full bg-white/10">
+      <div className="mt-3 relative h-8">
+        <div className="absolute inset-y-0 left-0 right-0 flex items-center">
+          <div className="h-2 w-full rounded-full bg-white/15" />
           <div
-            className="absolute h-2 rounded-full bg-emerald-500/70 shadow-[0_0_18px_rgba(16,185,129,0.35)]"
-            style={{ left: `${leftPct}%`, right: `${rightPct}%` }}
+            className="absolute h-2 rounded-full"
+            style={{ background: "rgba(102,185,108,0.70)", boxShadow: "0 0 18px rgba(102,185,108,0.35)", left: `${leftPct}%`, right: `${rightPct}%` }}
           />
         </div>
 
-        <div className="relative mt-3 h-6">
-          <input
-            type="range"
-            min={min}
-            max={max}
-            value={minVal}
-            onChange={(e) => setMinVal(Math.min(Number(e.target.value), maxVal - 1))}
-            className="pointer-events-auto absolute inset-0 w-full appearance-none bg-transparent"
-          />
-          <input
-            type="range"
-            min={min}
-            max={max}
-            value={maxVal}
-            onChange={(e) => setMaxVal(Math.max(Number(e.target.value), minVal + 1))}
-            className="pointer-events-auto absolute inset-0 w-full appearance-none bg-transparent"
-          />
-        </div>
+        <input
+          ref={minRef}
+          type="range"
+          min={min}
+          max={max}
+          value={valueMin}
+          onChange={(e) => setMin(Number(e.target.value))}
+          className="absolute left-0 right-0 top-0 h-8 w-full appearance-none bg-transparent"
+          style={{ pointerEvents: "auto" }}
+        />
 
-        <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
-          <span>{min}</span>
-          <span>{max}</span>
-        </div>
+        <input
+          ref={maxRef}
+          type="range"
+          min={min}
+          max={max}
+          value={valueMax}
+          onChange={(e) => setMax(Number(e.target.value))}
+          className="absolute left-0 right-0 top-0 h-8 w-full appearance-none bg-transparent"
+          style={{ pointerEvents: "auto" }}
+        />
+
+        <style jsx>{`
+          input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 22px;
+            width: 22px;
+            border-radius: 999px;
+            background: rgba(102, 185, 108, 1);
+            border: 2px solid rgba(255, 255, 255, 0.75);
+            box-shadow: 0 0 14px rgba(102, 185, 108, 0.55);
+            cursor: pointer;
+          }
+          input[type="range"]::-moz-range-thumb {
+            height: 22px;
+            width: 22px;
+            border-radius: 999px;
+            background: rgba(102, 185, 108, 1);
+            border: 2px solid rgba(255, 255, 255, 0.75);
+            box-shadow: 0 0 14px rgba(102, 185, 108, 0.55);
+            cursor: pointer;
+          }
+          input[type="range"]::-webkit-slider-runnable-track {
+            background: transparent;
+          }
+          input[type="range"]::-moz-range-track {
+            background: transparent;
+          }
+        `}</style>
       </div>
-
-      <style jsx>{`
-        input[type="range"]::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          height: 18px;
-          width: 18px;
-          border-radius: 9999px;
-          background: rgba(16, 185, 129, 1);
-          border: 2px solid rgba(255, 255, 255, 0.22);
-          box-shadow: 0 0 14px rgba(16, 185, 129, 0.55);
-          cursor: pointer;
-        }
-        input[type="range"]::-moz-range-thumb {
-          height: 18px;
-          width: 18px;
-          border-radius: 9999px;
-          background: rgba(16, 185, 129, 1);
-          border: 2px solid rgba(255, 255, 255, 0.22);
-          box-shadow: 0 0 14px rgba(16, 185, 129, 0.55);
-          cursor: pointer;
-        }
-      `}</style>
     </div>
   );
 }

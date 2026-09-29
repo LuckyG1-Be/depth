@@ -10,9 +10,9 @@ const CHAMPAGNE = "#f4e7c7";
 
 function safeShapeFromText(txt: string) {
   // canvas-confetti >= 1.6.0 has shapeFromText
-  const anyConfetti = confetti as any;
-  if (typeof anyConfetti.shapeFromText === "function") {
-    return anyConfetti.shapeFromText({ text: txt, scalar: 1.35 });
+  const api = confetti as typeof confetti & { shapeFromText?: (options: { text: string; scalar: number }) => unknown };
+  if (typeof api.shapeFromText === "function") {
+    return api.shapeFromText({ text: txt, scalar: 1.35 });
   }
   return undefined;
 }
@@ -59,7 +59,7 @@ export function DiscoverMatchConfetti({ fire }: { fire: boolean }) {
 
     // Heart layer (dating vibe)
     const hearts = () => {
-      const shape = heartShape ? [heartShape] : ["circle"];
+      const shape: any[] = heartShape ? [heartShape] : ["circle"];
       confetti({
         particleCount: 55,
         spread: 80,
@@ -111,7 +111,7 @@ export function DiscoverMatchConfetti({ fire }: { fire: boolean }) {
       if (t > durationMs) return;
 
       // gentle stream from top-center with hearts sprinkled in
-      const shape = heartShape ? [heartShape, "circle"] : ["circle"];
+      const shape: any[] = heartShape ? [heartShape, "circle"] : ["circle"];
       confetti({
         particleCount: 18,
         spread: 60,
@@ -127,6 +127,7 @@ export function DiscoverMatchConfetti({ fire }: { fire: boolean }) {
 
     // One last “finale” near the end
     const finale = window.setTimeout(() => {
+      const finaleShapes: any[] = heartShape ? [heartShape, "circle"] : ["circle"];
       confetti({
         particleCount: 90,
         spread: 110,
@@ -136,7 +137,7 @@ export function DiscoverMatchConfetti({ fire }: { fire: boolean }) {
         scalar: 1.1,
         origin: { x: 0.5, y: 0.30 },
         colors,
-        shapes: heartShape ? [heartShape, "circle"] : ["circle"],
+        shapes: finaleShapes,
       });
     }, 900);
 

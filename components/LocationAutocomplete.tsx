@@ -97,7 +97,7 @@ export default function LocationAutocomplete({
   }
 
   return (
-    <div ref={boxRef} className="relative">
+    <div ref={boxRef} className="relative w-full">
       <input
         value={text}
         onChange={(e) => {
@@ -109,7 +109,7 @@ export default function LocationAutocomplete({
         }}
         onFocus={() => setOpen(true)}
         placeholder={placeholder}
-        className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-emerald-300/30"
+        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-emerald-300/30"
       />
 
       <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/50">

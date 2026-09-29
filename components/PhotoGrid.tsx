@@ -1,214 +1,315 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useToast } from "@/components/ToastProvider";
+import { useMemo, useRef, useState } from "react";
 
-type PhotoRow = { id: string; slot: number };
-
-type MeResponse = {
-  ok: boolean;
-  user: { id: string; name: string; city: string; birthdate: string | null };
-  profile: any;
-  photos: Array<{ id: string; slot: number }>;
+export type ProfilePhoto = {
+  id: string;
+  slot: number; // 0..8
+  url: string;
 };
+
+const MAX_SLOTS = 9;
+const MIN_REQUIRED = 4;
 
 function cls(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
 
-const MAX_SLOTS = 6;
+async function postJson(url: string, body: any) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.ok === false) throw new Error(data?.error || "Actie mislukt");
+  return data;
+}
 
-function SlotCard({
-  slot,
-  photo,
-  onUpload,
-  onDelete,
-  onSwap,
-}: {
-  slot: number;
-  photo: PhotoRow | null;
-  onUpload: (slot: number, file: File) => void;
-  onDelete: (photoId: string) => void;
-  onSwap: (photoId: string, targetSlot: number) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const src = photo ? `/api/photo/${photo.id}` : null;
+async function postForm(url: string, fd: FormData) {
+  const res = await fetch(url, { method: "POST", body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.ok === false) throw new Error(data?.error || "Upload mislukt");
+  return data;
+}
+
+function Icon({ name }: { name: "plus" | "delete" | "crown" | "left" | "right" | "loader" }) {
+  if (name === "loader")
+    return (
+      <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin">
+        <path d="M12 2a10 10 0 0 1 10 10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      </svg>
+    );
+
+  const paths: Record<string, string> = {
+    plus: "M12 5v14M5 12h14",
+    delete: "M18 6L6 18M6 6l12 12",
+    crown: "M5 16l2-8 5 4 5-4 2 8H5Zm1 4h12",
+    left: "M14 6l-6 6 6 6",
+    right: "M10 6l6 6-6 6",
+  };
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-      <div className="aspect-[3/4] w-full">
-        {src ? (
-          <img src={src} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="grid h-full w-full place-items-center text-white/60 hover:text-white transition"
-            title={`Foto toevoegen (slot ${slot})`}
-          >
-            <div className="text-4xl">+</div>
-          </button>
-        )}
-      </div>
-
-      <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-white/80 backdrop-blur">
-        Foto {slot}
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onUpload(slot, f);
-          e.currentTarget.value = "";
-        }}
-      />
-
-      {photo ? (
-        <>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="absolute left-3 bottom-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
-            title="Vervangen"
-          >
-            ↻
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onDelete(photo.id)}
-            className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
-            title="Verwijderen"
-          >
-            ✕
-          </button>
-
-          <div className="absolute bottom-3 right-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => slot > 1 && onSwap(photo.id, slot - 1)}
-              disabled={slot <= 1}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/85 hover:bg-white/10 disabled:opacity-40"
-              title="Naar links"
-            >
-              ←
-            </button>
-            <button
-              type="button"
-              onClick={() => slot < MAX_SLOTS && onSwap(photo.id, slot + 1)}
-              disabled={slot >= MAX_SLOTS}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/85 hover:bg-white/10 disabled:opacity-40"
-              title="Naar rechts"
-            >
-              →
-            </button>
-          </div>
-        </>
-      ) : null}
-    </div>
+    <svg viewBox="0 0 24 24" className="h-4 w-4">
+      <path d={paths[name]} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-export default function PhotoGrid() {
-  const { toast } = useToast();
-  const [photos, setPhotos] = useState<PhotoRow[]>([]);
-  const [busy, setBusy] = useState(false);
+export default function ProfilePhotoManager({
+  photos,
+  onRefresh,
+}: {
+  photos: ProfilePhoto[];
+  onRefresh: () => Promise<void>;
+}) {
+  const [busySlot, setBusySlot] = useState<number | null>(null);
+  const [busyGlobal, setBusyGlobal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  async function refresh() {
-    const res = await fetch("/api/profile/me", { cache: "no-store" });
-    const data = (await res.json().catch(() => null)) as MeResponse | null;
-    if (!data?.ok) return;
-    setPhotos((data.photos || []).map((p) => ({ id: p.id, slot: p.slot })));
-  }
+  // ✅ We keep refs only for EMPTY slots (no replace)
+  const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  useEffect(() => {
-    void refresh();
-  }, []);
-
-  const slots = useMemo(() => {
-    const bySlot = new Map<number, PhotoRow>();
-    for (const p of photos) bySlot.set(p.slot, p);
-    return Array.from({ length: MAX_SLOTS }, (_, i) => {
-      const slot = i + 1;
-      return { slot, photo: bySlot.get(slot) || null };
-    });
+  const bySlot = useMemo(() => {
+    const m = new Map<number, ProfilePhoto>();
+    for (const p of photos) m.set(p.slot, p);
+    return m;
   }, [photos]);
 
+  const filledCount = photos.length;
+
+  function showToast(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 1300);
+  }
+
+  function openPicker(slot: number) {
+    inputRefs.current[slot]?.click();
+  }
+
   async function upload(slot: number, file: File) {
+    // ✅ Hard rule: no replace
+    if (bySlot.get(slot)) {
+      setError("Dit slot is al gevuld. Verwijder eerst de foto om een nieuwe toe te voegen.");
+      return;
+    }
+
+    setError(null);
+    setBusySlot(slot);
     try {
-      setBusy(true);
       const fd = new FormData();
-      fd.append("slot", String(slot));
-      fd.append("photo", file);
-
-      const res = await fetch("/api/profile/photos/set", { method: "POST", body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok !== true) {
-        toast({ kind: "error", title: "Upload mislukt", message: String(data?.error || "Probeer opnieuw") });
-        return;
-      }
-
-      toast({ kind: "success", message: "Foto opgeslagen" });
-      await refresh();
+      fd.set("slot", String(slot)); // 0-based
+      fd.set("photo", file);
+      await postForm("/api/profile/photos/set", fd);
+      await onRefresh();
+      showToast("Foto toegevoegd");
+    } catch (e: any) {
+      setError(e?.message || "Upload mislukt");
     } finally {
-      setBusy(false);
+      setBusySlot(null);
+      if (inputRefs.current[slot]) inputRefs.current[slot]!.value = "";
     }
   }
 
-  async function del(photoId: string) {
-    if (!confirm("Foto verwijderen?")) return;
+  async function remove(photoId: string) {
+    setError(null);
+    setBusyGlobal(true);
     try {
-      setBusy(true);
-      const res = await fetch("/api/profile/photos/delete", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ photoId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok !== true) {
-        toast({ kind: "error", title: "Verwijderen mislukt", message: String(data?.error || "Probeer opnieuw") });
-        return;
-      }
-      toast({ kind: "success", message: "Foto verwijderd" });
-      await refresh();
+      await postJson("/api/profile/photos/delete", { photoId });
+      await onRefresh();
+      showToast("Foto verwijderd");
+    } catch (e: any) {
+      setError(e?.message || "Verwijderen mislukt");
     } finally {
-      setBusy(false);
+      setBusyGlobal(false);
     }
   }
 
-  async function swap(photoId: string, targetSlot: number) {
+  async function move(from: number, to: number) {
+    if (from === to) return;
+    if (to < 0 || to >= MAX_SLOTS) return;
+    setError(null);
+    setBusyGlobal(true);
     try {
-      setBusy(true);
-      const res = await fetch("/api/profile/photos/swap", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ photoId, targetSlot }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok !== true) {
-        toast({ kind: "error", title: "Verplaatsen mislukt", message: String(data?.error || "Probeer opnieuw") });
-        return;
-      }
-      await refresh();
+      await postJson("/api/profile/photos/move", { from, to });
+      await onRefresh();
+      showToast("Volgorde aangepast");
+    } catch (e: any) {
+      setError(e?.message || "Actie mislukt");
     } finally {
-      setBusy(false);
+      setBusyGlobal(false);
     }
   }
 
   return (
-    <div className={cls(busy && "pointer-events-none opacity-80")}>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        {slots.map(({ slot, photo }) => (
-          <SlotCard key={slot} slot={slot} photo={photo} onUpload={upload} onDelete={del} onSwap={swap} />
-        ))}
+    <section className="relative rounded-3xl border border-white/10 bg-white/5 p-6">
+      {toast && (
+        <div className="pointer-events-none absolute right-5 top-5 rounded-2xl border border-white/10 bg-black/60 px-4 py-2 text-xs text-white/90 backdrop-blur">
+          {toast}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Foto’s</h2>
+          <p className="mt-1 text-sm opacity-80">
+            Min. <b>{MIN_REQUIRED}</b> nodig • Max <b>{MAX_SLOTS}</b> • <b>Vervangen kan niet</b> (eerst verwijderen)
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold">
+          {filledCount}/{MAX_SLOTS}
+        </div>
       </div>
-      <div className="mt-3 text-xs text-white/60">
-        Min. 4 foto’s om te kunnen swipen. Sleep/klik via pijltjes om de volgorde te bepalen.
+
+      {error && <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm">{error}</div>}
+
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        {Array.from({ length: MAX_SLOTS }).map((_, slot) => {
+          const p = bySlot.get(slot) || null;
+          const busy = busyGlobal || busySlot === slot;
+          const isMain = slot === 0;
+
+          return (
+            <div
+              key={slot}
+              className={cls(
+                "group relative overflow-hidden rounded-2xl border border-white/10 bg-black/20",
+                isMain && p && "ring-1 ring-emerald-300/30"
+              )}
+              // ✅ Definitief: enkel click-to-add op lege slot
+              onClick={() => {
+                if (busy) return;
+                if (!p) openPicker(slot);
+              }}
+              role={!p ? "button" : undefined}
+              tabIndex={!p ? 0 : -1}
+              title={!p ? "Klik om toe te voegen" : "Foto (vervangen uitgeschakeld)"}
+            >
+              {/* ✅ input bestaat ENKEL bij lege slot */}
+              {!p && (
+                <input
+                  ref={(el) => {
+                    inputRefs.current[slot] = el;
+                  }}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void upload(slot, f);
+                  }}
+                />
+              )}
+
+              <div className="aspect-[3/4] w-full">
+                {p ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.url}
+                    alt={`photo-${slot}`}
+                    className="h-full w-full object-cover pointer-events-none select-none"
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openPicker(slot);
+                      }}
+                      disabled={busy}
+                      className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4 text-white/90 hover:bg-white/10 disabled:opacity-60"
+                      aria-label="Voeg foto toe"
+                      title="Voeg foto toe"
+                    >
+                      {busySlot === slot ? <Icon name="loader" /> : <Icon name="plus" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-white/10 bg-black/55 px-2 py-1 text-[10px] text-white/80 backdrop-blur">
+                {isMain ? "Hoofdfoto" : `#${slot + 1}`}
+              </div>
+
+              {p ? (
+                <div className="absolute inset-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void remove(p.id);
+                      }}
+                      disabled={busy}
+                      className="rounded-xl border border-white/10 bg-black/45 p-2 text-white/90 hover:bg-black/60 disabled:opacity-60"
+                      aria-label="Verwijder"
+                      title="Verwijder"
+                    >
+                      <Icon name="delete" />
+                    </button>
+
+                    {!isMain && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void move(slot, 0);
+                        }}
+                        disabled={busy}
+                        className="rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-2 text-emerald-100 hover:bg-emerald-400/15 disabled:opacity-60"
+                        aria-label="Zet als hoofdfoto"
+                        title="Zet als hoofdfoto"
+                      >
+                        <Icon name="crown" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void move(slot, slot - 1);
+                      }}
+                      disabled={busy || slot === 0}
+                      className="rounded-xl border border-white/10 bg-black/45 p-2 text-white/90 hover:bg-black/60 disabled:opacity-60"
+                      aria-label="Links"
+                      title="Links"
+                    >
+                      <Icon name="left" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void move(slot, slot + 1);
+                      }}
+                      disabled={busy || slot === MAX_SLOTS - 1}
+                      className="rounded-xl border border-white/10 bg-black/45 p-2 text-white/90 hover:bg-black/60 disabled:opacity-60"
+                      aria-label="Rechts"
+                      title="Rechts"
+                    >
+                      <Icon name="right" />
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }

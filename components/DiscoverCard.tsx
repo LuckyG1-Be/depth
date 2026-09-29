@@ -55,6 +55,11 @@ export function DiscoverCard({
       const data = await res.json().catch(() => null);
       if (!res.ok || data?.ok !== true) throw new Error(data?.error || "Actie mislukt");
 
+      try {
+        window.dispatchEvent(new Event("depth:notifications-changed"));
+        if (data?.matchCreated || data?.queuedMatch) window.dispatchEvent(new Event("depth:threads-changed"));
+      } catch {}
+
       router.refresh();
     } catch (e: any) {
       setErr(e?.message || "Actie mislukt");
@@ -110,7 +115,7 @@ export function DiscoverCard({
             onClick={() => act("SUPERLIKE")}
             className="rounded-xl bg-white/10 px-3 py-2 text-sm hover:bg-white/15 disabled:opacity-50"
           >
-            Superlike
+            Dieptesignaal
           </button>
         </div>
       </div>

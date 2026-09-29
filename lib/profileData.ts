@@ -140,6 +140,11 @@ export const PROFILE_INTENTS = ["Serieuze relatie", "Casual", "Vriendschap", "No
 
 export const PROFILE_RELIGIONS = ["Geen", "Christelijk", "Islam", "Joods", "Hindoe", "Boeddhist", "Anders"];
 
+export const PROFILE_EDUCATIONS = ["Middelbare school", "Bachelor", "Master", "Doctoraat", "Nog studerend"];
+export const PROFILE_DRINKING = ["Ik drink niet", "Bij speciale gelegenheden", "Vaak", "Bijna dagelijks"];
+export const PROFILE_SMOKING = ["Ik rook niet", "Sociale roker", "Roker"];
+export const PROFILE_EXERCISE = ["Nooit", "Af en toe", "Vaak", "Dagelijks"];
+
 export const PROFILE_QUESTIONS = [
   "Wat is voor jou een perfecte zaterdag?",
   "Wat waardeer jij het meest in een relatie?",
