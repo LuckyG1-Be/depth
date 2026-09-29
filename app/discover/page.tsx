@@ -411,6 +411,9 @@ export default async function DiscoverPage() {
         isNew: u.createdAt ? new Date(u.createdAt).getTime() >= newCutoff : false,
       };
     })
+    // Alleen profielen met een hoofdfoto kunnen als veilige Discover-kaart verschijnen.
+    // Incomplete QA- en nieuwe profielen blijven wel zichtbaar in profielbeheer.
+    .filter((c) => !!c.photoId)
     .filter((c) => isWithinAge(c.age, minAge, maxAge))
     .filter((c) => {
       if (!hasMyCoords) return true;
