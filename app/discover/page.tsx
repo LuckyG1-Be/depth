@@ -207,6 +207,21 @@ export default async function DiscoverPage() {
 
   if (!me) redirect("/login");
 
+  // Een profiel zonder foto kan nog niet veilig als Discover-kaart worden getoond.
+  // Geef meteen een bruikbare vervolgstap terug en vermijd de kaartflow voor incomplete QA-profielen.
+  if (!Array.isArray(me.photos) || me.photos.length === 0) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-10">
+        <div className="depth-card p-5 sm:p-7">
+          <div className="depth-eyebrow">Discover</div>
+          <h1 className="mt-2 text-2xl font-semibold text-white">Voeg eerst je foto’s toe</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-white/65">Je profiel staat klaar. Upload minstens vier foto’s voordat je andere profielen ontdekt.</p>
+          <Link href="/profile/me" className="mt-5 inline-flex rounded-2xl bg-emerald-300 px-4 py-2.5 text-sm font-semibold text-black hover:bg-emerald-200">Naar mijn profiel</Link>
+        </div>
+      </div>
+    );
+  }
+
   if (me.isPaused) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10">
