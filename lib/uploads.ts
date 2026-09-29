@@ -2,7 +2,6 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import sharp from "sharp";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { R2Bucket } from "@cloudflare/workers-types";
 
@@ -131,6 +130,7 @@ function hasImageSignature(buffer: Buffer, mime: string) {
 }
 
 async function decodeAndNormalizeImage(input: Buffer) {
+  const sharp = (await import("sharp")).default;
   // rotate() strips EXIF-orientation issues
   const meta = await sharp(input, { limitInputPixels: MAX_PIXELS }).metadata();
 
@@ -160,6 +160,7 @@ async function decodeAndNormalizeImage(input: Buffer) {
 }
 
 async function computeAHashWebp(buf: Buffer) {
+  const sharp = (await import("sharp")).default;
   // 8x8 grayscale average hash, returned as 16 hex chars (64-bit)
   const raw = await sharp(buf).rotate().resize(8, 8, { fit: "fill" }).grayscale().raw().toBuffer();
   let sum = 0;
@@ -174,6 +175,7 @@ async function computeAHashWebp(buf: Buffer) {
 }
 
 async function makeThumb(buf: Buffer) {
+  const sharp = (await import("sharp")).default;
   // Small, non-blurred thumb for fast grids. 512px max.
   const out = await sharp(buf)
     .rotate()
