@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { contentTypeFromFilename, readUploadFileWithLegacyFallback } from "@/lib/uploads";
+import { contentTypeFromFilename, readUploadFile } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,7 +68,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   // Prefer generated thumb when asked
   const basePath = wantThumb && photo.thumbPath ? photo.thumbPath : photo.path;
-  const buf = readUploadFileWithLegacyFallback(basePath);
+  const buf = await readUploadFile(basePath);
   if (!buf) return NextResponse.json({ error: "FILE_MISSING" }, { status: 404 });
 
   // Optional resize (performance). Only downscale, never upscale.

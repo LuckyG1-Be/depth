@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { enforceMaxBodyBytes, rateLimitOrNull, getClientIp } from "@/lib/security";
-import { saveUpload } from "@/lib/uploads";
+import { deleteUploadIfExists, saveUpload } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,7 +95,10 @@ export async function POST(req: Request) {
     });
 
     // Upsert photo in slot
-    const existing = await prisma.photo.findFirst({ where: { userId, slot } });
+    const existing = await prisma.photo.findFirst({
+      where: { userId, slot },
+      select: { id: true, path: true, thumbPath: true },
+    });
 
     // ✅ Duplicate detection (very basic): same contentHash already used in another slot
     const dup = await prisma.photo.findFirst({
@@ -108,6 +111,7 @@ export async function POST(req: Request) {
     });
 
     if (dup) {
+      await deleteUploadIfExists(saved.uploadPath);
       throw new Error("DUPLICATE_PHOTO");
     }
 
@@ -122,16 +126,22 @@ export async function POST(req: Request) {
       thumbPath: saved.thumbPath,
     };
 
-    if (existing) {
-      await prisma.photo.update({ where: { id: existing.id }, data: patch });
-    } else {
-      await prisma.photo.create({
-        data: {
-          userId,
-          slot,
-          ...patch,
-        },
-      });
+    try {
+      if (existing) {
+        await prisma.photo.update({ where: { id: existing.id }, data: patch });
+        await deleteUploadIfExists(existing.path);
+      } else {
+        await prisma.photo.create({
+          data: {
+            userId,
+            slot,
+            ...patch,
+          },
+        });
+      }
+    } catch (dbError) {
+      await deleteUploadIfExists(saved.uploadPath);
+      throw dbError;
     }
 
     // Normalize to 0..MAX_SLOTS-1 without gaps

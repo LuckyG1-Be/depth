@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { contentTypeFromFilename, readUploadFileWithLegacyFallback } from "@/lib/uploads";
+import { contentTypeFromFilename, readUploadFile } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,7 +60,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   if (!chosen) return NextResponse.json({ error: "MISSING" }, { status: 404 });
 
-  const buf = readUploadFileWithLegacyFallback(chosen);
+  const buf = await readUploadFile(chosen);
   if (!buf) return NextResponse.json({ error: "FILE_MISSING" }, { status: 404 });
 
   const ct = contentTypeFromFilename(chosen) || "image/webp";

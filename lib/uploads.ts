@@ -3,6 +3,8 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import sharp from "sharp";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { R2Bucket } from "@cloudflare/workers-types";
 
 const PRIVATE_UPLOAD_DIR = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
@@ -14,6 +16,18 @@ const MAX_BYTES = 8 * 1024 * 1024; // 8MB (incoming)
 const MAX_PIXELS = 25_000_000; // anti “decompression bomb”
 const MAX_DIM = 2200; // output max width/height
 const MIN_DIM = 320; // avoid tiny / unusable uploads
+
+type UploadEnv = { UPLOADS?: R2Bucket };
+
+async function getUploadBucket(): Promise<R2Bucket | undefined> {
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    return (env as unknown as UploadEnv).UPLOADS;
+  } catch {
+    // Local Next.js development has no R2 binding. Use the disk fallback there.
+    return undefined;
+  }
+}
 
 export type UploadableFile = {
   name: string;
@@ -72,6 +86,11 @@ function normalizeToFilename(filenameOrUrl: string) {
   const clean = (filenameOrUrl || "").split("?")[0];
   if (clean.startsWith("/uploads/")) return clean.replace("/uploads/", "");
   return path.basename(clean);
+}
+
+function storageKey(filenameOrUrl: string) {
+  const clean = (filenameOrUrl || "").split("?")[0].replace(/^\/+/, "");
+  return clean.startsWith("uploads/") ? clean : `uploads/${normalizeToFilename(clean)}`;
 }
 
 export function resolveUploadPath(filenameOrUrl: string) {
@@ -169,8 +188,19 @@ export function readUploadFileWithLegacyFallback(uploadPathOrUrl: string) {
   return null;
 }
 
+export async function readUploadFile(uploadPathOrUrl: string) {
+  const local = readUploadFileWithLegacyFallback(uploadPathOrUrl);
+  if (local) return local;
+
+  const bucket = await getUploadBucket();
+  if (!bucket) return null;
+
+  const object = await bucket.get(storageKey(uploadPathOrUrl));
+  if (!object) return null;
+  return Buffer.from(await object.arrayBuffer());
+}
+
 export async function saveUpload(file: UploadableFile): Promise<SavedUpload> {
-  ensureUploadDir();
   assertUploadAllowed(file);
 
   const originalExt = path.extname(file.name || "").toLowerCase();
@@ -192,14 +222,24 @@ export async function saveUpload(file: UploadableFile): Promise<SavedUpload> {
   const normalized = await decodeAndNormalizeImage(buffer);
   if (normalized.buffer.byteLength > MAX_BYTES) throw new Error("FILE_TOO_LARGE");
 
-  await fs.promises.writeFile(diskPath, normalized.buffer);
-
   // Derived assets
-  const thumbDir = ensureThumbDir();
   const thumbFilename = filename.replace(/\.webp$/i, ".thumb.webp");
-  const thumbDiskPath = path.join(thumbDir, thumbFilename);
   const thumbBuf = await makeThumb(normalized.buffer);
-  await fs.promises.writeFile(thumbDiskPath, thumbBuf);
+
+  const bucket = await getUploadBucket();
+  if (bucket) {
+    await bucket.put(storageKey(`/uploads/${filename}`), new Uint8Array(normalized.buffer), {
+      httpMetadata: { contentType: "image/webp", cacheControl: "private, max-age=120" },
+    });
+    await bucket.put(storageKey(`/uploads/_thumbs/${thumbFilename}`), new Uint8Array(thumbBuf), {
+      httpMetadata: { contentType: "image/webp", cacheControl: "private, max-age=300" },
+    });
+  } else {
+    ensureUploadDir();
+    await fs.promises.writeFile(diskPath, normalized.buffer);
+    const thumbDir = ensureThumbDir();
+    await fs.promises.writeFile(path.join(thumbDir, thumbFilename), thumbBuf);
+  }
 
   const contentHash = crypto.createHash("sha256").update(normalized.buffer).digest("hex");
   const aHash = await computeAHashWebp(normalized.buffer);
@@ -216,6 +256,17 @@ export async function saveUpload(file: UploadableFile): Promise<SavedUpload> {
   };
 }
 export async function deleteUploadIfExists(uploadPathOrUrl: string) {
+  const bucket = await getUploadBucket();
+  if (bucket) {
+    const filename = normalizeToFilename(uploadPathOrUrl);
+    const thumbFilename = filename.replace(/\.webp$/i, ".thumb.webp");
+    await Promise.all([
+      bucket.delete(storageKey(uploadPathOrUrl)),
+      bucket.delete(`/uploads/_thumbs/${thumbFilename}`.replace(/^\//, "")),
+    ]);
+    return;
+  }
+
   try {
     const disk = resolveUploadPath(uploadPathOrUrl);
     await fs.promises.unlink(disk).catch(() => {});
