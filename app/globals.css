@@ -6,6 +6,10 @@
 body { @apply bg-zinc-50 text-zinc-900; margin: 0; }
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #a7f3d0; outline-offset: 3px; }
+.depth-enter { animation: depth-enter 420ms cubic-bezier(.22,1,.36,1) both; }
+.depth-rise { animation: depth-rise 520ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes depth-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes depth-rise { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }

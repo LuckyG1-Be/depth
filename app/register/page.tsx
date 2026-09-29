@@ -3,367 +3,72 @@
 import Link from "next/link";
 import { useState } from "react";
 
-type OtpStage = "idle" | "sent" | "busy" | "verified";
-
-function cleanPhone(input: string) {
-  return input.trim().replace(/[^\d+]/g, "");
-}
+type Stage = "idle" | "sent" | "busy" | "verified";
+const messages: Record<string, string> = {
+  EMAIL_NOT_CONFIGURED: "E-mailverificatie is nog niet geconfigureerd.",
+  EMAIL_SEND_FAILED: "De e-mail kon niet worden verstuurd. Probeer opnieuw.",
+  INVALID_CODE: "Deze code is niet juist.",
+  EXPIRED: "Deze code is verlopen. Vraag een nieuwe code aan.",
+  TOO_MANY_ATTEMPTS: "Te veel pogingen. Vraag een nieuwe code aan.",
+};
 
 export default function RegisterPage() {
-  // Phone verify
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [stage, setStage] = useState<OtpStage>("idle");
-  const [otpError, setOtpError] = useState<string | null>(null);
-
-  // Register form
-  const [submitting, setSubmitting] = useState(false);
+  const [stage, setStage] = useState<Stage>("idle");
+  const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const busy = stage === "busy";
+  const reset = () => { setStage("idle"); setCode(""); setError(null); setSubmitError(null); };
 
-  const isBusy = stage === "busy";
-  const canSend = !!phone && stage !== "verified" && !isBusy;
-  const canVerify = stage === "sent" && code.length === 6 && !isBusy;
-  const canRegister = stage === "verified" && !submitting;
-
-  async function startOtp() {
-    setOtpError(null);
-    setSubmitError(null);
-
-    if (!phone) {
-      setOtpError("Vul eerst een telefoonnummer in.");
-      return;
-    }
-
+  async function sendCode() {
+    setError(null);
+    if (!email.includes("@")) { setError("Vul eerst een geldig e-mailadres in."); return; }
+    setStage("busy");
     try {
-      setStage("busy");
-      const res = await fetch("/api/auth/phone/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ phone, purpose: "REGISTER" }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Kon geen code sturen.");
-
+      const response = await fetch("/api/auth/email/start", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ email }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(messages[data?.error] || data?.error || "Kon geen code sturen.");
       setStage("sent");
-    } catch (e: any) {
-      setStage("idle");
-      setOtpError(e?.message || "Fout bij versturen.");
-    }
+    } catch (err: any) { setStage("idle"); setError(err?.message || "Kon geen code sturen."); }
   }
 
-  async function verifyOtp() {
-    setOtpError(null);
-    setSubmitError(null);
-
-    if (code.length !== 6) {
-      setOtpError("Vul de 6-cijferige code in.");
-      return;
-    }
-
+  async function verifyCode() {
+    setError(null);
+    if (code.length !== 6) { setError("Vul de 6-cijferige code in."); return; }
+    setStage("busy");
     try {
-      setStage("busy");
-
-      // 1) verify => should set httpOnly verify cookie
-      const res = await fetch("/api/auth/phone/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ phone, code, purpose: "REGISTER" }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Code onjuist.");
-
-      // 2) confirm server sees cookie
-      const s = await fetch("/api/auth/phone/status", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-      const status = await s.json().catch(() => ({}));
-
-      if (!status?.ok) {
-        throw new Error(
-          "Verificatie gelukt, maar cookie werd niet opgeslagen. Refresh en probeer opnieuw."
-        );
-      }
-
-      // extra check: phone must match
-      if (String(status.phone || "") !== cleanPhone(phone)) {
-        throw new Error("Telefoonnummer mismatch. Probeer opnieuw.");
-      }
-
+      const response = await fetch("/api/auth/email/verify", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ email, code }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(messages[data?.error] || data?.error || "Code onjuist.");
       setStage("verified");
-    } catch (e: any) {
-      setStage("sent");
-      setOtpError(e?.message || "Fout bij verificatie.");
-    }
+    } catch (err: any) { setStage("sent"); setError(err?.message || "Verificatie mislukt."); }
   }
 
-  function resetPhone() {
-    setStage("idle");
-    setCode("");
-    setOtpError(null);
-    setSubmitError(null);
-  }
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSubmitError(null);
-
-    if (stage !== "verified") {
-      setSubmitError("Verifieer eerst je telefoonnummer.");
-      return;
-    }
-
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSubmitError(null);
+    if (stage !== "verified") { setSubmitError("Verifieer eerst je e-mailadres."); return; }
     setSubmitting(true);
     try {
-      const fd = new FormData(e.currentTarget);
-      fd.set("phone", phone);
-
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        body: fd,
-        credentials: "include",
-        redirect: "follow",
-      });
-
-      if (res.redirected) {
-        window.location.href = res.url;
-        return;
-      }
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSubmitError(data?.error || "Registratie mislukt.");
-        return;
-      }
-
+      const form = new FormData(event.currentTarget); form.set("email", email);
+      const response = await fetch("/api/auth/register", { method: "POST", body: form, credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setSubmitError(data?.error === "EMAIL_VERIFICATION_REQUIRED" ? "Verifieer opnieuw je e-mailadres." : data?.error || "Registratie mislukt."); return; }
       window.location.href = "/discover";
-    } catch (e: any) {
-      setSubmitError(e?.message || "Registratie mislukt.");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err: any) { setSubmitError(err?.message || "Registratie mislukt."); } finally { setSubmitting(false); }
   }
 
-  return (
-    <div className="mx-auto max-w-lg px-4 py-10">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-50">Registreren</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          In twee korte stappen maak je een veilig account. Je profiel kun je daarna rustig verder aanvullen.
-        </p>
-        <div className="mt-4 flex items-center gap-2 text-xs text-zinc-500">
-          <span className="h-1.5 flex-1 rounded-full bg-emerald-400" />
-          <span className="h-1.5 flex-1 rounded-full bg-zinc-800" />
-          <span>Stap 1 van 2</span>
-        </div>
-      </div>
-
-      <form onSubmit={onSubmit} className="space-y-4">
-        {/* PHONE VERIFY */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold text-zinc-50">Telefoon verificatie</div>
-            {stage === "verified" && (
-              <span className="text-xs rounded-full border border-green-900 bg-green-950 px-2 py-1 text-green-200">
-                Geverifieerd
-              </span>
-            )}
-          </div>
-
-          <label htmlFor="register-phone" className="mt-3 block text-xs text-zinc-400">Telefoonnummer (E.164)</label>
-          <div className="mt-1 flex gap-2">
-            <input
-              id="register-phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => {
-                const v = cleanPhone(e.target.value);
-                if (stage === "verified") resetPhone();
-                setPhone(v);
-              }}
-              placeholder="+32470123456"
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
-              disabled={stage === "verified" || isBusy}
-            />
-
-            {stage === "verified" ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setPhone("");
-                  resetPhone();
-                }}
-                className="rounded-xl border border-zinc-700 px-3 py-2 text-sm text-zinc-100"
-              >
-                Wijzig
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={startOtp}
-                disabled={!canSend}
-                className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-zinc-900 disabled:opacity-50"
-              >
-                {isBusy ? "..." : "Stuur code"}
-              </button>
-            )}
-          </div>
-
-          {(stage === "sent" || stage === "busy") && (
-            <>
-              <label htmlFor="register-otp" className="mt-3 block text-xs text-zinc-400">Verificatiecode</label>
-              <div className="mt-1 flex gap-2">
-                <input
-                  id="register-otp"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6))}
-                  placeholder="6 cijfers"
-                  inputMode="numeric"
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
-                  disabled={isBusy}
-                />
-                <button
-                  type="button"
-                  onClick={verifyOtp}
-                  disabled={!canVerify}
-                  className="rounded-xl border border-zinc-700 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
-                >
-                  {isBusy ? "Bezig..." : "Verifieer"}
-                </button>
-              </div>
-            </>
-          )}
-
-          {otpError && (
-            <div className="mt-3 rounded-xl border border-red-900 bg-red-950 px-3 py-2 text-sm text-red-200">
-              {otpError}
-            </div>
-          )}
-
-          <div className="mt-3 text-xs text-zinc-500">
-            We gebruiken je nummer alleen voor accountveiligheid en sturen geen marketing zonder toestemming.
-          </div>
-        </div>
-
-        {/* BASIC REGISTER FIELDS */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
-          <div className="grid gap-3">
-            <div>
-              <label htmlFor="register-name" className="block text-xs text-zinc-400">Voornaam</label>
-              <input
-                id="register-name"
-                name="name"
-                required
-                className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
-                placeholder="Voornaam"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="register-email" className="block text-xs text-zinc-400">E-mail</label>
-              <input
-                id="register-email"
-                name="email"
-                type="email"
-                required
-                className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
-                placeholder="naam@domein.be"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="register-password" className="block text-xs text-zinc-400">Wachtwoord</label>
-              <input
-                id="register-password"
-                name="password"
-                type="password"
-                required
-                minLength={6}
-                className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
-                placeholder="Min. 6 tekens"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="register-city" className="block text-xs text-zinc-400">Stad</label>
-              <input
-                id="register-city"
-                name="city"
-                required
-                className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
-                placeholder="Bijv. Gent"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="register-birthdate" className="block text-xs text-zinc-400">Geboortedatum</label>
-              <input
-                id="register-birthdate"
-                name="birthdate"
-                type="date"
-                required
-                className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-zinc-500"
-              />
-              <div className="mt-1 text-xs text-zinc-500">Je moet 18+ zijn.</div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-zinc-400">Geslacht</label>
-                <select
-                  name="gender"
-                  required
-                  defaultValue="Man"
-                  className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-zinc-500"
-                >
-                  <option value="Man">Man</option>
-                  <option value="Vrouw">Vrouw</option>
-                  <option value="X">X</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-zinc-400">Ik zoek</label>
-                <select
-                  name="lookingFor"
-                  required
-                  defaultValue="Vrouw"
-                  className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-zinc-500"
-                >
-                  <option value="Man">Man</option>
-                  <option value="Vrouw">Vrouw</option>
-                  <option value="X">X</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {submitError && (
-          <div className="rounded-xl border border-red-900 bg-red-950 px-3 py-2 text-sm text-red-200">
-            {submitError}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={!canRegister}
-          className="w-full rounded-2xl bg-white px-4 py-3 font-medium text-zinc-900 disabled:opacity-50"
-        >
-          {submitting ? "Bezig..." : stage !== "verified" ? "Verifieer eerst je nummer" : "Account maken"}
-        </button>
-
-        <div className="text-center text-sm text-zinc-400">
-          Heb je al een account?{" "}
-          <Link className="text-zinc-100 underline" href="/login">
-            Log in
-          </Link>
-        </div>
-      </form>
-    </div>
-  );
+  const input = "mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-zinc-500";
+  return <div className="depth-enter mx-auto max-w-lg px-4 py-10">
+    <div className="mb-6"><h1 className="text-2xl font-bold text-zinc-50">Registreren</h1><p className="mt-1 text-sm text-zinc-400">Maak in twee korte stappen een veilig account.</p><div className="mt-4 flex items-center gap-2 text-xs text-zinc-500"><span className="h-1.5 flex-1 rounded-full bg-emerald-400" /><span className="h-1.5 flex-1 rounded-full bg-zinc-800" /><span>Stap 1 van 2</span></div></div>
+    <form onSubmit={onSubmit} className="space-y-4">
+      <section className="depth-rise rounded-2xl border border-zinc-800 bg-zinc-950 p-4"><div className="flex items-center justify-between"><div><div className="text-sm font-semibold text-zinc-50">E-mailverificatie</div><div className="mt-1 text-xs text-zinc-400">Goedkoper en betrouwbaarder dan sms.</div></div>{stage === "verified" && <span className="rounded-full border border-green-900 bg-green-950 px-2 py-1 text-xs text-green-200">Geverifieerd</span>}</div>
+        <div className="mt-3 flex gap-2"><input id="register-email" type="email" value={email} onChange={(event) => { if (stage === "verified") reset(); setEmail(event.target.value.trim().toLowerCase()); }} placeholder="naam@domein.be" autoComplete="email" className={input} disabled={stage === "verified" || busy} required />{stage === "verified" ? <button type="button" onClick={() => { setEmail(""); reset(); }} className="rounded-xl border border-zinc-700 px-3 py-2 text-sm text-zinc-100">Wijzig</button> : <button type="button" onClick={sendCode} disabled={!email || busy} className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-zinc-900 disabled:opacity-50">{busy ? "..." : "Stuur code"}</button>}</div>
+        {(stage === "sent" || stage === "busy") && <div className="mt-3 flex gap-2"><input id="register-email-code" value={code} onChange={(event) => setCode(event.target.value.replace(/[^\d]/g, "").slice(0, 6))} placeholder="6 cijfers" inputMode="numeric" autoComplete="one-time-code" className={input} disabled={busy} /><button type="button" onClick={verifyCode} disabled={busy || code.length !== 6} className="rounded-xl border border-zinc-700 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50">Verifieer</button></div>}{error && <div className="mt-3 rounded-xl border border-red-900 bg-red-950 px-3 py-2 text-sm text-red-200">{error}</div>}
+      </section>
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"><div className="grid gap-3"><label className="text-xs text-zinc-400">Voornaam<input name="name" required minLength={2} autoComplete="given-name" className={input} placeholder="Voornaam" /></label><label className="text-xs text-zinc-400">Wachtwoord<input name="password" type="password" required minLength={6} autoComplete="new-password" className={input} placeholder="Min. 6 tekens" /></label><label className="text-xs text-zinc-400">Stad<input name="city" required autoComplete="address-level2" className={input} placeholder="Bijv. Gent" /></label><label className="text-xs text-zinc-400">Geboortedatum<input name="birthdate" type="date" required className={input} /><span className="mt-1 block text-xs text-zinc-500">Je moet 18+ zijn.</span></label><div className="grid grid-cols-2 gap-3"><label className="text-xs text-zinc-400">Geslacht<select name="gender" required defaultValue="Man" className={input}><option>Man</option><option>Vrouw</option><option>X</option></select></label><label className="text-xs text-zinc-400">Ik zoek<select name="lookingFor" required defaultValue="Vrouw" className={input}><option>Man</option><option>Vrouw</option><option>X</option></select></label></div></div></section>
+      {submitError && <div className="rounded-xl border border-red-900 bg-red-950 px-3 py-2 text-sm text-red-200">{submitError}</div>}<button type="submit" disabled={stage !== "verified" || submitting} className="w-full rounded-2xl bg-white px-4 py-3 font-medium text-zinc-900 disabled:opacity-50">{submitting ? "Bezig..." : stage !== "verified" ? "Verifieer eerst je e-mailadres" : "Account maken"}</button><div className="text-center text-sm text-zinc-400">Heb je al een account? <Link className="text-zinc-100 underline" href="/login">Log in</Link></div>
+    </form>
+  </div>;
 }

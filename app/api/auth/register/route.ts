@@ -3,9 +3,22 @@ import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { touchDevice } from "@/lib/device";
 import { logSecurityEvent } from "@/lib/security/risk";
+import { randomUUID } from "crypto";
+import { cookies } from "next/headers";
+import { EMAIL_VERIFY_COOKIE, readEmailToken } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+async function readBody(req: Request) {
+  const contentType = req.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) return (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+    const form = await req.formData();
+    return Object.fromEntries(form.entries());
+  }
+  return {};
+}
 
 function boolEnv(name: string, fallback: boolean) {
   const v = (process.env[name] ?? "").toLowerCase().trim();
@@ -21,7 +34,7 @@ function isValidEmail(email: string) {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => null)) as null | {
+    const body = (await readBody(req)) as {
       email?: string;
       password?: string;
       name?: string;
@@ -66,15 +79,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "UNDERAGE" }, { status: 400 });
     }
 
-    // ✅ DEV bypass: in development of wanneer REQUIRE_OTP_VERIFICATION=0
-    const requireOtp = boolEnv("REQUIRE_OTP_VERIFICATION", false);
+    // E-mail verification is required in production; development keeps the local seed flow usable.
+    const requireOtp = boolEnv("REQUIRE_EMAIL_VERIFICATION", true);
     const isDev = process.env.NODE_ENV !== "production";
 
     if (requireOtp && !isDev) {
-      // Later: hier check je email OTP / phone OTP status.
-      // Voor nu blokkeren we in prod wanneer de flag aan staat.
-      if (!body?.otpVerified) {
-        return NextResponse.json({ ok: false, error: "OTP_REQUIRED" }, { status: 400 });
+      const emailToken = await readEmailToken((await cookies()).get(EMAIL_VERIFY_COOKIE)?.value ?? null);
+      if (!emailToken || emailToken.email !== email || emailToken.purpose !== "REGISTER") {
+        return NextResponse.json({ ok: false, error: "EMAIL_VERIFICATION_REQUIRED" }, { status: 400 });
       }
     }
 
@@ -92,17 +104,9 @@ export async function POST(req: Request) {
     // Phone is bij jou schema vaak @unique; in dev wil je niet verplichten
     // => we vullen een dev-telefoon in wanneer leeg
     const phoneRaw = (body?.phone || "").trim();
-    const phone =
-      phoneRaw ||
-      (isDev
-        ? `dev-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-        : ""); // prod: later verplicht maken met OTP flow
-
-    // Als je phone in schema @unique is en niet nullable, moet hij niet leeg zijn in prod.
-    if (!phone) {
-      // zolang je OTP nog niet finaliseert, zet REQUIRE_OTP_VERIFICATION=0 ook op prod test
-      return NextResponse.json({ ok: false, error: "PHONE_REQUIRED" }, { status: 400 });
-    }
+    // The current schema keeps phone unique/non-null for backwards compatibility.
+    // It is no longer a registration requirement; users can add it later in profile settings.
+    const phone = phoneRaw || `email-only-${randomUUID()}`;
 
     const user = await prisma.user.create({
       data: {
@@ -115,9 +119,9 @@ export async function POST(req: Request) {
         birthdate,
         phone,
 
-        // ✅ voorlopig: meteen verified in dev-bypass scenario
-        verified: !requireOtp || isDev ? true : false,
-        phoneVerifiedAt: !requireOtp || isDev ? new Date() : null,
+        // A verified e-mail is the account-level verification signal.
+        verified: true,
+        phoneVerifiedAt: null,
 
         profile: {
           create: {
@@ -157,7 +161,9 @@ export async function POST(req: Request) {
       meta: { devBypass: !requireOtp || isDev },
     }).catch(() => {});
 
-    return NextResponse.json({ ok: true, user });
+    const response = NextResponse.json({ ok: true, user });
+    response.cookies.set(EMAIL_VERIFY_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
+    return response;
   } catch (e: any) {
     console.error("POST /api/auth/register failed:", e);
     return NextResponse.json({ ok: false, error: e?.message || "REGISTER_FAILED" }, { status: 500 });
