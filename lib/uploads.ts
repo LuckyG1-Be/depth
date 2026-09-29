@@ -45,7 +45,7 @@ export type SavedUpload = {
   height: number | null;
   sizeBytes: number;
   contentHash: string; // sha256 of stored bytes
-  aHash: string; // simple perceptual hash (8x8 average hash)
+  aHash: string | null; // simple perceptual hash (8x8 average hash)
   thumbPath: string; // "/uploads/_thumbs/<filename>"
 };
 
@@ -120,6 +120,14 @@ function assertUploadAllowed(file: UploadableFile) {
   const mime = (file.type || "").toLowerCase();
   const ok = mime === "image/jpeg" || mime === "image/png" || mime === "image/webp" || mime === "image/gif" || mime === "";
   if (!ok) throw new Error("UNSUPPORTED_FILETYPE");
+}
+
+function hasImageSignature(buffer: Buffer, mime: string) {
+  if (mime === "image/jpeg") return buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mime === "image/png") return buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  if (mime === "image/gif") return buffer.subarray(0, 6).toString("ascii") === "GIF87a" || buffer.subarray(0, 6).toString("ascii") === "GIF89a";
+  if (mime === "image/webp") return buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+  return false;
 }
 
 async function decodeAndNormalizeImage(input: Buffer) {
@@ -221,6 +229,31 @@ export async function saveUpload(file: UploadableFile): Promise<SavedUpload> {
 
   if (buffer.byteLength > MAX_BYTES) throw new Error("FILE_TOO_LARGE");
 
+  const bucket = await getUploadBucket();
+  if (bucket) {
+    const mime = (file.type || "").toLowerCase();
+    if (!hasImageSignature(buffer, mime)) throw new Error("INVALID_IMAGE");
+
+    const extension = extFromMime(mime) || ".img";
+    const filename = normalizeFilename((file.name || "upload") + extension);
+    const uploadPath = `/uploads/${filename}`;
+
+    await bucket.put(storageKey(uploadPath), new Uint8Array(buffer), {
+      httpMetadata: { contentType: mime, cacheControl: "private, max-age=120" },
+    });
+
+    return {
+      uploadPath,
+      mime,
+      width: null,
+      height: null,
+      sizeBytes: buffer.byteLength,
+      contentHash: crypto.createHash("sha256").update(buffer).digest("hex"),
+      aHash: null,
+      thumbPath: uploadPath,
+    };
+  }
+
   const normalized = await decodeAndNormalizeImage(buffer);
   if (normalized.buffer.byteLength > MAX_BYTES) throw new Error("FILE_TOO_LARGE");
 
@@ -228,20 +261,10 @@ export async function saveUpload(file: UploadableFile): Promise<SavedUpload> {
   const thumbFilename = filename.replace(/\.webp$/i, ".thumb.webp");
   const thumbBuf = await makeThumb(normalized.buffer);
 
-  const bucket = await getUploadBucket();
-  if (bucket) {
-    await bucket.put(storageKey(`/uploads/${filename}`), new Uint8Array(normalized.buffer), {
-      httpMetadata: { contentType: "image/webp", cacheControl: "private, max-age=120" },
-    });
-    await bucket.put(storageKey(`/uploads/_thumbs/${thumbFilename}`), new Uint8Array(thumbBuf), {
-      httpMetadata: { contentType: "image/webp", cacheControl: "private, max-age=300" },
-    });
-  } else {
-    ensureUploadDir();
-    await fs.promises.writeFile(diskPath, normalized.buffer);
-    const thumbDir = ensureThumbDir();
-    await fs.promises.writeFile(path.join(thumbDir, thumbFilename), thumbBuf);
-  }
+  ensureUploadDir();
+  await fs.promises.writeFile(diskPath, normalized.buffer);
+  const thumbDir = ensureThumbDir();
+  await fs.promises.writeFile(path.join(thumbDir, thumbFilename), thumbBuf);
 
   const contentHash = crypto.createHash("sha256").update(normalized.buffer).digest("hex");
   const aHash = await computeAHashWebp(normalized.buffer);

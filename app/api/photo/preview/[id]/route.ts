@@ -73,20 +73,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (wRaw) {
     const w = clampInt(Number(wRaw), 96, 1600);
     if (Number.isFinite(w)) {
-      const sharp = (await import("sharp")).default;
-      const out = await sharp(buf)
-        .rotate()
-        .resize({ width: w, withoutEnlargement: true })
-        .webp({ quality: 82 })
-        .toBuffer();
-
-      return new NextResponse(new Uint8Array(out), {
-        headers: {
-          "Content-Type": "image/webp",
-          "Cache-Control": "private, max-age=300",
-          "X-Content-Type-Options": "nosniff",
-        },
-      });
+      try {
+        const sharp = (await import("sharp")).default;
+        const out = await sharp(buf).rotate().resize({ width: w, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+        return new NextResponse(new Uint8Array(out), { headers: { "Content-Type": "image/webp", "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff" } });
+      } catch {
+        // Cloudflare Workers do not load native sharp; return the private original.
+      }
     }
   }
 

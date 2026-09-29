@@ -54,6 +54,9 @@ function uploadErrorToHttp(e: any) {
   if (msg === "DUPLICATE_PHOTO") {
     return { status: 400, body: { error: "Deze foto heb je al toegevoegd (duplicaat gedetecteerd)." } };
   }
+  if (msg === "INVALID_IMAGE") {
+    return { status: 400, body: { error: "Dit bestand is geen geldige afbeelding. Kies een echte JPG, PNG of WEBP-foto." } };
+  }
 
   return { status: 500, body: { error: "Upload mislukt. Probeer opnieuw." } };
 }
