@@ -21,7 +21,9 @@ type UploadEnv = { UPLOADS?: R2Bucket };
 
 async function getUploadBucket(): Promise<R2Bucket | undefined> {
   try {
-    const { env } = await getCloudflareContext({ async: true });
+    // Route handlers already run inside the OpenNext request context. The
+    // synchronous accessor is also what the D1 adapter uses in this app.
+    const { env } = getCloudflareContext();
     return (env as unknown as UploadEnv).UPLOADS;
   } catch {
     // Local Next.js development has no R2 binding. Use the disk fallback there.
